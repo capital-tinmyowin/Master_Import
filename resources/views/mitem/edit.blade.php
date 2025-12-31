@@ -1,5 +1,3 @@
-@include('navbar')
-
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <style>
@@ -240,8 +238,8 @@
     }
 
     #skuPopupTable {
-        border-collapse: separate;
-        border-spacing: 0 10px;
+        /* border-collapse: separate; */
+        border-spacing: 0 5px;
         /* Add space between rows */
         width: 100%;
         table-layout: fixed;
@@ -300,7 +298,7 @@
     #skuPopupTable .form-select {
         padding: 5px 8px !important;
         font-size: 0.875rem !important;
-        height: 32px !important;
+        height: 38px !important;
         width: 100%;
         flex-shrink: 0;
         /* Don't shrink */
@@ -488,13 +486,14 @@
         width: 200px;
     }
 </style>
+    @include('navbar')
 
 <div class="container mt-4">
     <h3 class="mb-3">Edit Item</h3>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <a href="{{ route('mitems.index') }}" class="btn btn-secondary mb-3">← Back</a>
 
-    <form method="POST" enctype="multipart/form-data">
+    <form action="{{ route('mitems.update', $item->ID) }}" method="POST" enctype="multipart/form-data">
         @csrf
         @method('PUT')
 
@@ -596,21 +595,24 @@
                             </table>
                             @endif
                         </div>
-
-                        <input type="hidden" name="sku[Size_Name]" id="skuSizeName" value="{{ old('sku.Size_Name') }}">
+                        <input type="hidden" name="sku[Size_Name]" id="skuSizeName">
+                        <input type="hidden" name="sku[Color_Name]" id="skuColorName">
+                        <input type="hidden" name="sku[Size_Code]" id="skuSizeCode">
+                        <input type="hidden" name="sku[Color_Code]" id="skuColorCode">
+                        <input type="hidden" name="sku[JanCD]" id="skuJanCD">
+                        <input type="hidden" name="sku[Quantity]" id="skuQuantity">
+                        <!-- <input type="hidden" name="sku[Size_Name]" id="skuSizeName" value="{{ old('sku.Size_Name') }}">
                         <input type="hidden" name="sku[Color_Name]" id="skuColorName" value="{{ old('sku.Color_Name') }}">
                         <input type="hidden" name="sku[Size_Code]" id="skuSizeCode" value="{{ old('sku.Size_Code') }}">
                         <input type="hidden" name="sku[Color_Code]" id="skuColorCode" value="{{ old('sku.Color_Code') }}">
                         <input type="hidden" name="sku[JanCD]" id="skuJanCD" value="{{ old('sku.JanCD') }}">
-                        <input type="hidden" name="sku[Quantity]" id="skuQuantity" value="{{ old('sku.Quantity') }}">
+                        <input type="hidden" name="sku[Quantity]" id="skuQuantity" value="{{ old('sku.Quantity') }}"> -->
                     </div>
                 </div>
             </div>
 
-            <!-- PRICE CARD -->
-            <!-- PRICE CARD -->
             <div class="col-md-4">
-                <div class="card shadow-sm h-100 price-card"> <!-- Add price-card class here -->
+                <div class="card shadow-sm h-100 price-card">
                     <div class="card-body">
                         <!-- Price fields with horizontal layout -->
                         <div class="form-group">
@@ -666,7 +668,6 @@
                         <div id="photoDropArea" class="p-4 border border-secondary rounded text-center bg-light" style="cursor:pointer;">
                             <p class="mb-1">📷 Click or Drag & Drop NEW photos here</p>
                             <small class="text-muted">Supported: JPG, PNG, WEBP — Multiple allowed (5 max total)</small>
-                            <input type="file" id="photoInput" name="Photos[]" class="d-none" accept="image/*" multiple>
                         </div>
 
                     </div>
@@ -681,8 +682,13 @@
         </table>
 
         <input type="hidden" name="sku_data" id="skuDataInput">
-
-        <button action="{{ route('logout') }}" class="btn btn-warning float-end mt-3" style="margin-bottom: 40px;">Update</button>
+        <input
+            type="file"
+            id="photoInput"
+            name="Photos[]"
+            multiple
+            hidden>
+        <button class="btn btn-warning float-end mt-3" style="margin-bottom: 40px;">Update</button>
     </form>
 
     <!-- SKU Adding Form Modal -->
@@ -698,7 +704,7 @@
                 <!-- Body -->
                 <div class="modal-body">
                     <table class="table table-bordered text-center align-middle" id="skuPopupTable">
-                        <thead style="background:#84C8FF;">
+                        <thead style="background:#84C8FF; border-top: 1px solid #1212 !important">
                             <tr>
                                 <th style="width:80px;">Delete</th>
                                 <th>サイズ名<br><small>(項目選択肢別在庫用横軸選択肢)</small></th>
@@ -711,23 +717,68 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Rows will be populated with existing SKU data -->
                             @if($skus && count($skus) > 0)
                             @foreach($skus as $sku)
                             <tr>
                                 <td><button type="button" class="btn btn-danger btn-sm deleteRow">Delete</button></td>
-                                <td><input type="text" class="form-control size-name" value="{{ $sku->Size_Name }}"></td>
-                                <td><input type="text" class="form-control color-name" value="{{ $sku->Color_Name }}"></td>
-                                <td><input type="text" class="form-control size-code" value="{{ $sku->Size_Code }}"></td>
-                                <td><input type="text" class="form-control color-code" value="{{ $sku->Color_Code }}"></td>
-                                <td><input type="text" class="form-control jan" value="{{ $sku->JanCD }}" style="width: 170px !important;"></td>
+
+                                <!-- Size Name with validation -->
                                 <td>
-                                    <select class="form-select qty-flag" style="width: 95px !important;">
-                                        <option value="完売" {{ $sku->Quantity == 0 ? 'selected' : '' }}>完売 (0)</option>
-                                        <option value="手入力" {{ $sku->Quantity > 0 ? 'selected' : '' }}>手入力</option>
-                                    </select>
+                                    <div>
+                                        <input type="text" class="form-control size-name" value="{{ $sku->Size_Name }}" required>
+                                        <div class="invalid-feedback">必須</div>
+                                    </div>
                                 </td>
-                                <td><input type="number" class="form-control qty" value="{{ $sku->Quantity }}" style="width: 90px !important;"></td>
+
+                                <!-- Color Name with validation -->
+                                <td>
+                                    <div>
+                                        <input type="text" class="form-control color-name" value="{{ $sku->Color_Name }}" required>
+                                        <div class="invalid-feedback">必須</div>
+                                    </div>
+                                </td>
+
+                                <!-- Size Code with validation -->
+                                <td>
+                                    <div>
+                                        <input type="text" class="form-control size-code" value="{{ $sku->Size_Code }}" required>
+                                        <div class="invalid-feedback">必須</div>
+                                    </div>
+                                </td>
+
+                                <!-- Color Code with validation -->
+                                <td>
+                                    <div>
+                                        <input type="text" class="form-control color-code" value="{{ $sku->Color_Code }}" required>
+                                        <div class="invalid-feedback">必須</div>
+                                    </div>
+                                </td>
+
+                                <!-- JAN Code with validation -->
+                                <td>
+                                    <div>
+                                        <input type="text" class="form-control jan" value="{{ $sku->JanCD }}" required maxlength="13" style="width: 170px !important; text-align: center;">
+                                        <div class="invalid-feedback">13桁の数字</div>
+                                    </div>
+                                </td>
+
+                                <!-- Quantity Flag -->
+                                <td>
+                                    <div>
+                                        <select class="form-select qty-flag" style="width: 95px !important;">
+                                            <option value="完売" {{ $sku->Quantity == 0 ? 'selected' : '' }}>完売 (0)</option>
+                                            <option value="手入力" {{ $sku->Quantity > 0 ? 'selected' : '' }}>手入力</option>
+                                        </select>
+                                    </div>
+                                </td>
+
+                                <!-- Quantity with validation -->
+                                <td>
+                                    <div>
+                                        <input type="number" class="form-control qty" value="{{ $sku->Quantity }}" style="width: 90px !important; text-align: right;" required>
+                                        <div class="invalid-feedback">必須</div>
+                                    </div>
+                                </td>
                             </tr>
                             @endforeach
                             @endif
@@ -739,72 +790,22 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" id="addNewRowBtn">Add New Row</button>
                     <button type="button" class="btn btn-success" id="saveSkuBtn">Save</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" id="closePopup" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
+<script src="/js/sku.js"></script>
 <script>
-    // Replace the current form submit event handler with this:
-    document.querySelector('form').addEventListener('submit', function(e) {
-        e.preventDefault();
+    let dropArea, fileInput, previewList;
+    let skuTempData = [];
+    let dbSkus = [];
 
-        // Validate all fields
-        if (!validateAllFields()) {
-            const firstError = document.querySelector('.is-invalid');
-            if (firstError) {
-                firstError.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center'
-                });
-                firstError.focus();
-            }
-            return false;
-        }
-
-        // Validate SKU JAN codes
-        let hasSkuErrors = false;
-        let skuJanErrors = [];
-
-        skuTempData.forEach((sku, index) => {
-            if (sku.JanCD && !/^\d{13}$/.test(sku.JanCD)) {
-                skuJanErrors.push(`SKU行 ${index + 1}: JANコードが無効です (${sku.JanCD})`);
-                hasSkuErrors = true;
-            }
-        });
-
-        if (hasSkuErrors) {
-            alert('SKUのJANコードにエラーがあります:\n\n' + skuJanErrors.join('\n'));
-            var skuModal = new bootstrap.Modal(document.getElementById("skuModal"));
-            skuModal.show();
-            return false;
-        }
-
-        console.log('All validations passed, submitting form...');
-
-        // Update SKU hidden inputs
-        updateSkuHiddenInputs();
-
-        // *** ADD THIS LINE: Ensure file input is updated before submit ***
-        updateFileInput();
-
-        // Debug: Check files are properly attached
-        console.log('Number of photos to upload:', photoData.length);
-        console.log('Files in file input:', fileInput.files.length);
-        for (let i = 0; i < fileInput.files.length; i++) {
-            console.log(`File ${i}: ${fileInput.files[i].name}`);
-        }
-
-        // Submit the form normally
-        this.submit();
-    });
     // Helper function to get file extension
     function getFileExtension(filename) {
         return filename.split('.').pop();
     }
-
 
     // Byte counting functions
     function getByteLength(text) {
@@ -973,13 +974,13 @@
     }
 
     function setupUnifiedValidation() {
-        // Clear all existing validation event listeners first
-        const fields = document.querySelectorAll('input, textarea');
-        fields.forEach(field => {
-            // Clone the field to remove all event listeners
-            const newField = field.cloneNode(true);
-            field.parentNode.replaceChild(newField, field);
-        });
+        // const fields = document.querySelectorAll('input:not([type="file"]), textarea');
+
+        // fields.forEach(field => {
+        //     // Clone the field to remove all event listeners
+        //     const newField = field.cloneNode(true);
+        //     field.parentNode.replaceChild(newField, field);
+        // });
 
         // MakerName validation
         const makerNameField = document.querySelector('input[name="MakerName"]');
@@ -1153,9 +1154,7 @@
         if (!x) return "";
         return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
-    let skuTempData = [];
 
-    // Initialize with existing SKU data
     <?php
     if (isset($skus) && count($skus) > 0) {
         echo "skuTempData = " . json_encode($skus->map(function ($sku) {
@@ -1165,200 +1164,72 @@
                 'Size_Code' => $sku->Size_Code,
                 'Color_Code' => $sku->Color_Code,
                 'JanCD' => $sku->JanCD,
-                'Quantity' => $sku->Quantity
+                'Quantity' => $sku->Quantity,
+                'isExisting' => true // mark as database row
             ];
         })) . ";";
     }
     ?>
 
-    // Open popup
-    document.getElementById("addSkuBtn").addEventListener("click", function() {
-        var skuModal = new bootstrap.Modal(document.getElementById("skuModal"));
-        skuModal.show();
-    });
 
-    // Create new row for popup
+
     function createSkuRow() {
         return `
-        <tr>
-            <td>
-                <div>
-                    <button type="button" class="btn btn-danger btn-sm deleteRow">Delete</button>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="text" class="form-control size-name" required>
-                    <div class="invalid-feedback">必須</div>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="text" class="form-control color-name" required>
-                    <div class="invalid-feedback">必須</div>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="text" class="form-control size-code" required>
-                    <div class="invalid-feedback">必須</div>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="text" class="form-control color-code" required>
-                    <div class="invalid-feedback">必須</div>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="text" class="form-control jan" required maxlength="13">
-                    <div class="invalid-feedback">13桁の数字</div>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <select class="form-select qty-flag">
-                        <option value="完売">完売 (0)</option>
-                        <option value="手入力">手入力</option>
-                    </select>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <input type="number" class="form-control qty" style="text-align: right;" required>
-                    <div class="invalid-feedback">必須</div>
-                </div>
-            </td>
-        </tr>
-    `;
+    <tr>
+        <td>
+            <div>
+                <button type="button" class="btn btn-danger btn-sm deleteRow">Delete</button>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="text" class="form-control size-name" required>
+                <div class="invalid-feedback">必須</div>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="text" class="form-control color-name" required>
+                <div class="invalid-feedback">必須</div>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="text" class="form-control size-code" required>
+                <div class="invalid-feedback">必須</div>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="text" class="form-control color-code" required>
+                <div class="invalid-feedback">必須</div>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="text" class="form-control jan" required maxlength="13" style="text-align:center;">
+                <div class="invalid-feedback">13桁の数字</div>
+            </div>
+        </td>
+        <td>
+            <div>
+                <select class="form-select qty-flag">
+                    <option value="完売">完売 (0)</option>
+                    <option value="手入力" selected>手入力</option> <!-- Make this default for new rows -->
+                </select>
+            </div>
+        </td>
+        <td>
+            <div>
+                <input type="number" class="form-control qty" style="text-align: right;" value="0" required>
+                <div class="invalid-feedback">必須</div>
+            </div>
+        </td>
+    </tr>
+`;
     }
 
-    document.getElementById("addNewRowBtn").addEventListener("click", function() {
-        document.querySelector("#skuPopupTable tbody").insertAdjacentHTML("beforeend", createSkuRow());
-    });
 
-    // Delete a row
-    document.addEventListener("click", function(e) {
-        if (e.target.classList.contains("deleteRow")) {
-            e.target.closest("tr").remove();
-        }
-    });
-
-    document.getElementById("saveSkuBtn").addEventListener("click", function() {
-        skuTempData = [];
-        let hasError = false;
-
-        // Clear previous errors
-        document.querySelectorAll("#skuPopupTable .is-invalid").forEach(el => {
-            el.classList.remove("is-invalid");
-        });
-
-        // Hide all error messages initially
-        document.querySelectorAll("#skuPopupTable .invalid-feedback").forEach(el => {
-            el.style.display = 'none';
-        });
-
-        document.querySelectorAll("#skuPopupTable tbody tr").forEach((row, index) => {
-            const sizeName = row.querySelector(".size-name");
-            const colorName = row.querySelector(".color-name");
-            const sizeCode = row.querySelector(".size-code");
-            const colorCode = row.querySelector(".color-code");
-            const janCode = row.querySelector(".jan");
-            const quantity = row.querySelector(".qty");
-            const rowNumber = index + 1;
-
-            let rowHasError = false;
-
-            // Validate all required fields
-            if (!sizeName.value.trim()) {
-                sizeName.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            if (!colorName.value.trim()) {
-                colorName.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            if (!sizeCode.value.trim()) {
-                sizeCode.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            if (!colorCode.value.trim()) {
-                colorCode.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            // Validate JAN code
-            if (!janCode.value.trim()) {
-                janCode.classList.add("is-invalid");
-                rowHasError = true;
-            } else if (!/^\d{13}$/.test(janCode.value.trim())) {
-                janCode.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            // Validate quantity
-            if (!quantity.value && quantity.value !== 0) {
-                quantity.classList.add("is-invalid");
-                rowHasError = true;
-            }
-
-            if (rowHasError) {
-                hasError = true;
-
-                // Show error messages for invalid fields in this row
-                if (sizeName.classList.contains('is-invalid')) {
-                    sizeName.nextElementSibling.style.display = 'block';
-                }
-                if (colorName.classList.contains('is-invalid')) {
-                    colorName.nextElementSibling.style.display = 'block';
-                }
-                if (sizeCode.classList.contains('is-invalid')) {
-                    sizeCode.nextElementSibling.style.display = 'block';
-                }
-                if (colorCode.classList.contains('is-invalid')) {
-                    colorCode.nextElementSibling.style.display = 'block';
-                }
-                if (janCode.classList.contains('is-invalid')) {
-                    janCode.nextElementSibling.style.display = 'block';
-                }
-                if (quantity.classList.contains('is-invalid')) {
-                    quantity.nextElementSibling.style.display = 'block';
-                }
-            }
-
-            skuTempData.push({
-                Size_Name: sizeName.value.trim(),
-                Color_Name: colorName.value.trim(),
-                Size_Code: sizeCode.value.trim(),
-                Color_Code: colorCode.value.trim(),
-                JanCD: janCode.value.trim(),
-                Quantity: quantity.value,
-            });
-        });
-
-        if (hasError) {
-            // Scroll to first error
-            const firstError = document.querySelector("#skuPopupTable .is-invalid");
-            if (firstError) {
-                const errorCell = firstError.closest('td');
-                if (errorCell) {
-                    errorCell.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center'
-                    });
-                }
-            }
-            return; // Don't proceed if there are errors
-        }
-
-        // If no errors, proceed
-        renderSkuMatrix();
-        bootstrap.Modal.getInstance(document.getElementById("skuModal")).hide();
-    });
 
     // Add real-time validation for SKU fields
     function setupSkuRealTimeValidation() {
@@ -1480,217 +1351,343 @@
         container.innerHTML = html;
     }
 
-    // Photo upload functionality
-    // Photo upload functionality
-    let photoData = [];
-    let deletedImages = [];
-
-    const dropArea = document.getElementById("photoDropArea");
-    const fileInput = document.getElementById("photoInput");
-    const previewList = document.getElementById("photoPreviewList");
-    const hiddenPhotoData = document.getElementById("hiddenPhotoData");
-
-    function showPhotoLimitError() {
-        const existingCount = document.querySelectorAll('.existing-photo-item').length;
-        const newCount = photoData.length;
-        const totalCount = existingCount + newCount;
-        alert(`Error: Maximum 5 photos allowed. You already have ${totalCount} photos. Please delete some photos before adding more.`);
+    function normalizeCode4Digits(value) {
+        return value.toString().trim().padStart(4, "0");
     }
 
-    // Update photo count and drop area state
-    function updatePhotoCountAndDropArea() {
-        const existingCount = document.querySelectorAll('.existing-photo-item').length;
-        const newCount = photoData.length;
-        const totalCount = existingCount + newCount;
+    // const existingSkus = window.existingSkus || []; // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener("input", function(e) {
+            const row = e.target.closest("#skuPopupTable tbody tr");
+            if (!row) return;
 
-        if (totalCount >= 5) {
-            dropArea.classList.add('disabled');
-            dropArea.style.cursor = 'not-allowed';
-            dropArea.innerHTML = `
-            <p class="mb-1 text-muted">📷 Maximum 5 photos reached</p>
-            <small class="text-muted">Delete photos to add more</small>
-        `;
-        } else {
-            dropArea.classList.remove('disabled');
-            dropArea.style.cursor = 'pointer';
-            const remaining = 5 - totalCount;
-            dropArea.innerHTML = `
-            <p class="mb-1">📷 Click or Drag & Drop NEW photos here</p>
-            <small class="text-muted">Supported: JPG, PNG, WEBP — ${remaining} more allowed</small>
-        `;
-        }
-    }
+            row.dataset.isDirty = "1";
+        });
 
-    // CLICK → OPEN FILE DIALOG
-    dropArea.addEventListener("click", () => {
-        if (!dropArea.classList.contains('disabled')) {
-            fileInput.click();
-        }
-    });
-
-    // SELECT FILES
-    fileInput.addEventListener("change", function() {
-        handleFiles(this.files);
-    });
-
-    // DRAG ENTER + HOVER
-    ["dragenter", "dragover"].forEach(eventName => {
-        dropArea.addEventListener(eventName, e => {
-            if (!dropArea.classList.contains('disabled')) {
-                e.preventDefault();
-                dropArea.classList.add("dragover");
+        document.addEventListener("input", function(e) {
+            if (e.target.classList.contains("size-code") || e.target.classList.contains("color-code")) {
+                // Remove non-digit characters
+                e.target.value = e.target.value.replace(/\D/g, '');
+                // Limit to 4 digits
+                if (e.target.value.length > 4) {
+                    e.target.value = e.target.value.slice(0, 4);
+                }
             }
         });
-    });
+        document.getElementById("addSkuBtn").addEventListener("click", function() {
+            const tbody = document.querySelector("#skuPopupTable tbody");
+            tbody.innerHTML = ""; // Clear previous rows
 
-    // DRAG LEAVE
-    ["dragleave", "drop"].forEach(eventName => {
-        dropArea.addEventListener(eventName, e => {
-            e.preventDefault();
-            dropArea.classList.remove("dragover");
+            // Render only saved SKUs
+            skuTempData.forEach((sku) => {
+                // alert(sku.Size_Name);
+                const tr = document.createElement("tr");
+                tr.dataset.isExisting = sku.isExisting ? "1" : "0";
+                tr.dataset.isDirty = "0";
+                tr.innerHTML = `
+                        <td><button type="button" class="btn btn-danger btn-sm deleteRow">Delete</button></td>
+                        <td><input type="text" class="form-control size-name" value="${sku.Size_Name}"></td>
+                        <td><input type="text" class="form-control color-name" value="${sku.Color_Name}"></td>
+                        <td><input type="text" class="form-control size-code" value="${sku.Size_Code}"></td>
+                        <td><input type="text" class="form-control color-code" value="${sku.Color_Code}"></td>
+                        <td><input type="text" class="form-control jan" style="text-align:center" value="${sku.JanCD}"></td>
+                        <td>
+                            <select class="form-select qty-flag">
+                                <option value="完売" ${sku.Quantity_Flag === '完売' ? 'selected' : ''}>完売 (0)</option>
+                                <option value="手入力" ${sku.Quantity_Flag === '手入力' ? 'selected' : ''}>手入力</option>
+                            </select>
+                        </td>
+                        <td><input type="number" class="form-control qty" value="${sku.Quantity}" style="text-align:right;"></td>
+                    `;
+                tbody.appendChild(tr);
+            });
+
+            // Show modal
+            new bootstrap.Modal(document.getElementById("skuModal")).show();
         });
-    });
 
-    // DROP
-    dropArea.addEventListener("drop", e => {
-        e.preventDefault();
-        if (!dropArea.classList.contains('disabled')) {
-            handleFiles(e.dataTransfer.files);
-        }
-    });
+        document.getElementById("addNewRowBtn").addEventListener("click", function() {
+            const tbody = document.querySelector("#skuPopupTable tbody");
+            tbody.insertAdjacentHTML("beforeend", createSkuRow());
+        });
 
-    function handleFiles(files) {
-        const existingCount = document.querySelectorAll('.existing-photo-item').length;
-        const newCount = photoData.length;
-        const totalCount = existingCount + newCount;
-        const remainingSlots = 5 - totalCount;
+        // Delete a row
+        document.addEventListener("click", function(e) {
+            if (e.target.classList.contains("deleteRow")) {
+                e.target.closest("tr").remove();
+            }
+        });
 
-        if (files.length > remainingSlots) {
-            showPhotoLimitError();
+        document.getElementById("closePopup").addEventListener("click", function() {
+            const tbody = document.querySelector("#skuPopupTable tbody");
+            if (tbody) {
+                tbody.innerHTML = "";
+            }
+
+            // Remove only non-existing rows from skuTempData
+            // skuTempData = skuTempData.filter(item => item.isExisting);
+        });
+
+        document.getElementById("saveSkuBtn").addEventListener("click", function() {
+            //   skuTempData = [];
+            const nextSkuTempData = [];
+            const existingSkus = window.existingSkus || [];
+            let hasError = false;
+
+            const sizeCodeToName = {};
+            const sizeNameToCode = {};
+            const colorCodeToName = {};
+            const colorNameToCode = {};
+            const sizeColorSet = new Set();
+
+            // alert("reach");
+            existingSkus.forEach(sku => {
+                const sc = normalizeCode4Digits(sku.Size_Code);
+                const cc = normalizeCode4Digits(sku.Color_Code);
+
+                sizeCodeToName[sc] = sku.Size_Name;
+                sizeNameToCode[sku.Size_Name] = sc;
+                colorCodeToName[cc] = sku.Color_Name;
+                colorNameToCode[sku.Color_Name] = cc;
+                sizeColorSet.add(`${sc}|${cc}`);
+            });
+
+            // Maps for validation
+            const sizeCodeNameMap = {}; // { sizeCode: sizeName }
+            const sizeColorCombinationSet = new Set(); // "sizeCode|colorCode"
+
+            // Clear previous errors
+            document.querySelectorAll("#skuPopupTable .is-invalid").forEach(el => {
+                el.classList.remove("is-invalid");
+            });
+
+            // Hide all error messages initially
+            document.querySelectorAll("#skuPopupTable .invalid-feedback").forEach(el => {
+                el.style.display = 'none';
+            });
+
+            document.querySelectorAll("#skuPopupTable tbody tr").forEach((row, index) => {
+                const isExisting = row.dataset.isExisting === "1";
+                const isDirty = row.dataset.isDirty === "1";
+
+                const sizeName = row.querySelector(".size-name");
+                const colorName = row.querySelector(".color-name");
+                const sizeCode = row.querySelector(".size-code");
+                const colorCode = row.querySelector(".color-code");
+                const janCode = row.querySelector(".jan");
+                const quantity = row.querySelector(".qty");
+
+                let rowHasError = false;
+
+                // -------------------------
+                // Required field validation
+                // -------------------------
+                if (!sizeName.value.trim()) {
+                    sizeName.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                if (!colorName.value.trim()) {
+                    colorName.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                if (!sizeCode.value.trim()) {
+                    sizeCode.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                if (!colorCode.value.trim()) {
+                    colorCode.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                // JAN validation
+                if (!janCode.value.trim() || !/^\d{13}$/.test(janCode.value.trim())) {
+                    janCode.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                // Quantity validation
+                if (!quantity.value && quantity.value !== 0) {
+                    quantity.classList.add("is-invalid");
+                    rowHasError = true;
+                }
+
+                // -------------------------
+                // 🔥 FINAL STRICT SKU VALIDATION (CORRECT)
+                // -------------------------
+                const scRaw = sizeCode.value.trim();
+                const ccRaw = colorCode.value.trim();
+
+                const sc = normalizeCode4Digits(scRaw);
+                const cc = normalizeCode4Digits(ccRaw);
+
+                const sn = sizeName.value.trim();
+                const cn = colorName.value.trim();
+
+                // 1️⃣ SizeCode ↔ SizeName (GLOBAL)
+                if (sc && sn) {
+                    if (
+                        (sizeCodeToName[sc] && sizeCodeToName[sc] !== sn) ||
+                        (sizeNameToCode[sn] && sizeNameToCode[sn] !== sc)
+                    ) {
+                        sizeCode.classList.add("is-invalid");
+                        sizeName.classList.add("is-invalid");
+                        rowHasError = true;
+                    }
+                }
+
+                // 2️⃣ ColorCode ↔ ColorName (GLOBAL)
+                if (cc && cn) {
+                    if (
+                        (colorCodeToName[cc] && colorCodeToName[cc] !== cn) ||
+                        (colorNameToCode[cn] && colorNameToCode[cn] !== cc)
+                    ) {
+                        colorCode.classList.add("is-invalid");
+                        colorName.classList.add("is-invalid");
+                        rowHasError = true;
+                    }
+                }
+
+                // 3️⃣ SizeCode + ColorCode must be unique (GLOBAL)
+                if (sc && cc) {
+                    const key = `${sc}|${cc}`;
+                    if (sizeColorSet.has(key)) {
+                        sizeCode.classList.add("is-invalid");
+                        colorCode.classList.add("is-invalid");
+                        rowHasError = true;
+                    }
+                }
+
+                // ✅ Register ONLY IF row is valid
+                // if (!rowHasError) {
+                //     sizeCodeToName[sc] = sn;
+                //     sizeNameToCode[sn] = sc;
+                //     colorCodeToName[cc] = cn;
+                //     colorNameToCode[cn] = cc;
+                //     sizeColorSet.add(`${sc}|${cc}`);
+                // }
+
+
+                // -------------------------
+                // Show errors if any
+                // -------------------------
+                if (rowHasError) {
+                    if (isExisting && !isDirty) {
+                        nextSkuTempData.push({
+                            Size_Name: sizeName.value.trim(),
+                            Color_Name: colorName.value.trim(),
+                            Size_Code: sc,
+                            Color_Code: cc,
+                            JanCD: janCode.value.trim(),
+                            Quantity: quantity.value,
+                            isExisting: true
+                        });
+                        return;
+                    }
+
+                    // Otherwise → block save
+                    hasError = true;
+
+                    row.querySelectorAll(".is-invalid").forEach(input => {
+                        if (input.nextElementSibling) {
+                            input.nextElementSibling.style.display = "block";
+                        }
+                    });
+                    return;
+                }
+
+                if (!rowHasError || (isExisting && !isDirty)) {
+
+                    // Register mappings ONLY if row is valid
+                    if (!rowHasError) {
+                        sizeCodeToName[sc] = sn;
+                        sizeNameToCode[sn] = sc;
+                        colorCodeToName[cc] = cn;
+                        colorNameToCode[cn] = cc;
+                        sizeColorSet.add(`${sc}|${cc}`);
+                    }
+
+                    nextSkuTempData.push({
+                        Size_Name: sizeName.value.trim(),
+                        Color_Name: colorName.value.trim(),
+                        Size_Code: sc,
+                        Color_Code: cc,
+                        JanCD: janCode.value.trim(),
+                        Quantity: quantity.value,
+                        isExisting: isExisting
+                    });
+                }
+
+            });
+
+            // Scroll to first error
+            if (hasError) {
+                const firstError = document.querySelector("#skuPopupTable .is-invalid");
+                if (firstError) {
+                    firstError.closest("td")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center"
+                    });
+                }
+                return;
+            }
+            skuTempData = nextSkuTempData;
+            // Proceed if valid
+            renderSkuMatrix();
+            bootstrap.Modal.getInstance(document.getElementById("skuModal")).hide();
+            document.querySelector("#skuPopupTable tbody").innerHTML = "";
+        });
+
+        dropArea = document.getElementById("photoDropArea");
+        fileInput = document.getElementById("photoInput");
+        previewList = document.getElementById("photoPreviewList");
+
+        if (!fileInput) {
+            console.error('photoInput not found');
             return;
         }
 
-        Array.from(files).forEach(file => {
-            const id = Date.now() + Math.random();
+        // Initialize photo UI
+        updatePhotoCountAndDropArea();
 
-            // Store the original File object
-            photoData.push({
-                id: id,
-                file: file, // This must be the actual File object
-                preview: URL.createObjectURL(file)
+        // CLICK → OPEN FILE DIALOG
+        dropArea.addEventListener("click", () => {
+            if (!dropArea.classList.contains('disabled')) {
+                fileInput.click();
+            }
+        });
+
+        // SELECT FILES
+        fileInput.addEventListener("change", function() {
+            handleFiles(this.files);
+        });
+
+        // DRAG EVENTS
+        ["dragenter", "dragover"].forEach(eventName => {
+            dropArea.addEventListener(eventName, e => {
+                if (!dropArea.classList.contains('disabled')) {
+                    e.preventDefault();
+                    dropArea.classList.add("dragover");
+                }
             });
         });
 
-        // *** ADD THIS LINE: Update the actual file input ***
-        updateFileInput();
+        ["dragleave", "drop"].forEach(eventName => {
+            dropArea.addEventListener(eventName, e => {
+                e.preventDefault();
+                dropArea.classList.remove("dragover");
+            });
+        });
 
-        renderPhotos();
-        updatePhotoCountAndDropArea();
-
-        // Clear the file input so same files can be selected again
-        fileInput.value = '';
-    }
-
-    function updateFileInput() {
-        if (photoData.length === 0) {
-            fileInput.files = null;
-            return;
-        }
-
-        // Create a DataTransfer object to hold the files
-        const dataTransfer = new DataTransfer();
-
-        // Add all files from photoData to DataTransfer
-        photoData.forEach(photo => {
-            if (photo.file instanceof File) {
-                dataTransfer.items.add(photo.file);
+        dropArea.addEventListener("drop", e => {
+            e.preventDefault();
+            if (!dropArea.classList.contains('disabled')) {
+                handleFiles(e.dataTransfer.files);
             }
         });
 
-        // Update the file input with the new FileList
-        fileInput.files = dataTransfer.files;
-
-        console.log('Files in input:', fileInput.files.length);
-    }
-
-
-    // RENDER PHOTO PREVIEW GRID
-    function renderPhotos() {
-        previewList.innerHTML = "";
-
-        photoData.forEach(photo => {
-            previewList.insertAdjacentHTML("beforeend", `
-        <div class="col-md-3">
-            <div class="photo-card">
-                <img src="${photo.preview}">
-                <button class="btn btn-danger btn-sm w-100 mt-2 delete-photo"
-                        data-id="${photo.id}">Delete</button>
-            </div>
-        </div>
-    `);
-        });
-    }
-
-    // Helper function to get filename without extension
-    function getFileNameWithoutExtension(filename) {
-        return filename.replace(/\.[^/.]+$/, "");
-    }
-
-    let existingImageNames = {};
-    document.addEventListener('input', function(e) {
-        if (e.target.classList.contains('rename-existing-input')) {
-            const imageId = e.target.dataset.id;
-            const newName = e.target.value.trim();
-
-            existingImageNames[imageId] = newName;
-        }
-    });
-
-
-    // DELETE NEW PHOTO
-    document.addEventListener("click", e => {
-        if (e.target.classList.contains("delete-photo")) {
-            const id = e.target.dataset.id;
-
-            // Remove from photoData
-            photoData = photoData.filter(x => x.id != id);
-
-            // *** ADD THIS LINE: Update the file input after deletion ***
-            updateFileInput();
-
-            renderPhotos();
-            updatePhotoCountAndDropArea();
-        }
-    });
-
-    // DELETE EXISTING PHOTO
-    document.addEventListener("click", function(e) {
-        if (e.target.classList.contains("delete-existing-photo")) {
-            const imageId = e.target.dataset.id;
-
-            // Add to deleted images array
-            if (!deletedImages.includes(imageId)) {
-                deletedImages.push(imageId);
-            }
-
-            // Remove from DOM
-            e.target.closest('.existing-photo-item').remove();
-
-            // Update hidden input
-            document.getElementById('deletedImagesInput').value = JSON.stringify(deletedImages);
-
-            // Update photo count and drop area state
-            updatePhotoCountAndDropArea();
-        }
-    });
-
-    // Initialize on page load
-    // document.addEventListener('DOMContentLoaded', function() {
-    //     updatePhotoCountAndDropArea();
-    // });
-
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
         // Existing setup
         const itemNameField = document.querySelector('textarea[name="ItemName"]');
         if (itemNameField) {
@@ -1710,6 +1707,46 @@
         document.querySelectorAll('.rename-existing-input').forEach(input => {
             const imageId = input.dataset.id;
             existingImageNames[imageId] = input.value.trim();
+        });
+
+        document.querySelector('form').addEventListener('submit', function(e) {
+
+            // Remove commas
+            document.querySelectorAll('.price-input').forEach(input => {
+                input.value = input.value.replace(/,/g, '');
+            });
+
+            // Validate
+            if (!validateAllFields()) {
+                e.preventDefault();
+                return false;
+            }
+
+            let sizes = [],
+                colors = [],
+                sizeCodes = [],
+                colorCodes = [],
+                jans = [],
+                qtys = [];
+
+            skuTempData.forEach(item => {
+                sizes.push(item.Size_Name);
+                colors.push(item.Color_Name);
+                sizeCodes.push(item.Size_Code);
+                colorCodes.push(item.Color_Code);
+                jans.push(item.JanCD);
+                qtys.push(item.Quantity);
+            });
+
+            document.getElementById("skuSizeName").value = JSON.stringify(sizes);
+            document.getElementById("skuColorName").value = JSON.stringify(colors);
+            document.getElementById("skuSizeCode").value = JSON.stringify(sizeCodes);
+            document.getElementById("skuColorCode").value = JSON.stringify(colorCodes);
+            document.getElementById("skuJanCD").value = JSON.stringify(jans);
+            document.getElementById("skuQuantity").value = JSON.stringify(qtys);
+            updateFileInput();
+
+            console.log('Submitting files:', fileInput.files.length);
         });
 
         updatePhotoCountAndDropArea();
@@ -1738,4 +1775,196 @@
             }
         });
     }
+
+    // Photo upload functionality - FIXED VERSION
+    let photoData = [];
+    let deletedImages = [];
+    const MAX_PHOTOS = 5;
+
+    // Show photo limit error
+    function showPhotoLimitError() {
+        const existingCount = document.querySelectorAll('.existing-photo-item').length;
+        const newCount = photoData.length;
+        const totalCount = existingCount + newCount;
+        alert(`Error: Maximum ${MAX_PHOTOS} photos allowed. You already have ${totalCount} photos. Please delete some photos before adding more.`);
+    }
+
+    // Update photo count and drop area state
+    function updatePhotoCountAndDropArea() {
+        const existingCount = document.querySelectorAll('.existing-photo-item').length;
+        const newCount = photoData.length;
+        const totalCount = existingCount + newCount;
+
+        if (totalCount >= MAX_PHOTOS) {
+            dropArea.classList.add('disabled');
+            dropArea.style.cursor = 'not-allowed';
+            dropArea.innerHTML = `
+            <p class="mb-1 text-muted">📷 Maximum ${MAX_PHOTOS} photos reached</p>
+            <small class="text-muted">Delete photos to add more</small>
+        `;
+        } else {
+            dropArea.classList.remove('disabled');
+            dropArea.style.cursor = 'pointer';
+            const remaining = MAX_PHOTOS - totalCount;
+            dropArea.innerHTML = `
+            <p class="mb-1">📷 Click or Drag & Drop NEW photos here</p>
+            <small class="text-muted">Supported: JPG, PNG, WEBP — ${remaining} more allowed</small>
+        `;
+        }
+    }
+
+    function handleFiles(files) {
+        const existingCount = document.querySelectorAll('.existing-photo-item').length;
+        const totalCount = existingCount + photoData.length;
+        const remainingSlots = MAX_PHOTOS - totalCount;
+
+        if (files.length > remainingSlots) {
+            showPhotoLimitError();
+            return;
+        }
+
+        console.log('handleFiles called with', files.length, 'files');
+
+        Array.from(files).forEach(file => {
+            console.log('Processing file:', file.name, file.type, file.size);
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+                alert(`Invalid file type: ${file.type}. Please select only image files.`);
+                return;
+            }
+
+            // Validate file size (5MB max)
+            if (file.size > 5 * 1024 * 1024) {
+                alert(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is 5MB.`);
+                return;
+            }
+
+            const id = Date.now() + Math.random();
+
+            // Create preview using FileReader for better compatibility
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                console.log('FileReader loaded file:', file.name);
+
+                photoData.push({
+                    id: id,
+                    file: file, // Keep the original File object
+                    preview: e.target.result, // Use DataURL for preview
+                    baseName: getFileNameWithoutExtension(file.name)
+                });
+
+                console.log('Added to photoData. Total:', photoData.length);
+
+                // Update file input
+                updateFileInput();
+
+                // Render previews
+                renderPhotos();
+
+                // Update UI
+                updatePhotoCountAndDropArea();
+            };
+
+            reader.onerror = function(e) {
+                console.error('FileReader error:', e);
+                alert(`Error reading file: ${file.name}`);
+            };
+
+            // Read the file as DataURL for preview
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function getFileNameWithoutExtension(filename) {
+        return filename.replace(/\.[^/.]+$/, "");
+    }
+
+    function updateFileInput() {
+        if (!fileInput) {
+            console.error('updateFileInput called but fileInput is null');
+            return;
+        }
+
+        const dt = new DataTransfer();
+
+        photoData.forEach(photo => {
+            if (photo.file instanceof File) {
+                dt.items.add(photo.file);
+            }
+        });
+
+        fileInput.files = dt.files;
+
+        console.log('Synced files to input:', fileInput.files.length);
+    }
+
+
+    // RENDER PHOTO PREVIEW GRID
+    function renderPhotos() {
+        console.log('renderPhotos called. photoData length:', photoData.length);
+
+        previewList.innerHTML = "";
+
+        if (photoData.length === 0) {
+            console.log('No photos to render');
+            return;
+        }
+
+        photoData.forEach((photo, index) => {
+            console.log(`Rendering photo ${index}:`, photo.file.name);
+
+            previewList.insertAdjacentHTML("beforeend", `
+            <div class="col-md-3">
+                <div class="photo-card">
+                    <img src="${photo.preview}" alt="Preview" style="width:100%; height:160px; object-fit:cover;">
+                    <button class="btn btn-danger btn-sm w-100 mt-2 delete-photo"
+                            data-id="${photo.id}">Delete</button>
+                </div>
+            </div>
+        `);
+        });
+    }
+
+    // DELETE NEW PHOTO
+    document.addEventListener("click", e => {
+        if (e.target.classList.contains("delete-photo")) {
+            const id = e.target.dataset.id;
+            console.log('Deleting photo with id:', id);
+
+            // Remove from photoData
+            const initialLength = photoData.length;
+            photoData = photoData.filter(x => x.id != id);
+            console.log(`Removed photo. Before: ${initialLength}, After: ${photoData.length}`);
+
+            // Update file input
+            updateFileInput();
+
+            renderPhotos();
+            updatePhotoCountAndDropArea();
+        }
+    });
+
+    // DELETE EXISTING PHOTO
+    document.addEventListener("click", function(e) {
+        if (e.target.classList.contains("delete-existing-photo")) {
+            const imageId = e.target.dataset.id;
+
+            // Add to deleted images array
+            if (!deletedImages.includes(imageId)) {
+                deletedImages.push(imageId);
+            }
+
+            // Remove from DOM
+            e.target.closest('.existing-photo-item').remove();
+
+            // Update hidden input
+            document.getElementById('deletedImagesInput').value = JSON.stringify(deletedImages);
+
+            // Update photo count and drop area state
+            updatePhotoCountAndDropArea();
+        }
+    });
 </script>

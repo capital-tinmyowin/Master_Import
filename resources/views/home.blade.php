@@ -1436,41 +1436,74 @@
                         <tbody>
                             @foreach($errorLogs as $error)
                             <tr>
-                                <td style="text-align: center !important;">{{ $error->Item_Code }}</td>
-                                <td style="text-align: center !important;">{{ $error->Size_Code ?? '-' }}</td>
-                                <td style="text-align: center !important;">{{ $error->Color_Code ?? '-' }}</td>
-                                <td style="text-align: left !important;">{{ $error->Size_Name ?? '-' }}</td>
-                                <td style="text-align: left !important;">{{ $error->Color_Name ?? '-' }}</td>
-                                <td style="text-align: center !important;" class="jancd-cell">
-                                    @php
-                                    $janCode = $error->JanCD ?? '-';
-                                    $janLength = strlen($janCode);
-                                    @endphp
-                                    @if($janLength > 13)
+                                <!-- Item Code -->
+                                <td style="text-align: center !important;">
                                     <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
-                                        data-bs-title="{{ htmlspecialchars($janCode, ENT_QUOTES) }}">
-                                        {{ substr($janCode, 0, 13) }}...
+                                        title="{{ htmlspecialchars($error->Item_Code ?? '-', ENT_QUOTES) }}">
+                                        {{ strlen($error->Item_Code ?? '-') > 15 ? substr($error->Item_Code, 0, 15).'...' : ($error->Item_Code ?? '-') }}
                                     </span>
-                                    @else
-                                    <span>{{ $janCode }}</span>
-                                    @endif
                                 </td>
+
+                                <!-- Size Code -->
+                                <td style="text-align: center !important;">
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($error->Size_Code ?? '-', ENT_QUOTES) }}">
+                                        {{ strlen($error->Size_Code ?? '-') > 10 ? substr($error->Size_Code, 0, 10).'...' : ($error->Size_Code ?? '-') }}
+                                    </span>
+                                </td>
+
+                                <!-- Color Code -->
+                                <td style="text-align: center !important;">
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($error->Color_Code ?? '-', ENT_QUOTES) }}">
+                                        {{ strlen($error->Color_Code ?? '-') > 10 ? substr($error->Color_Code, 0, 10).'...' : ($error->Color_Code ?? '-') }}
+                                    </span>
+                                </td>
+
+                                <!-- Size Name -->
+                                <td style="text-align: left !important;">
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($error->Size_Name ?? '-', ENT_QUOTES) }}">
+                                        {{ strlen($error->Size_Name ?? '-') > 15 ? substr($error->Size_Name, 0, 15).'...' : ($error->Size_Name ?? '-') }}
+                                    </span>
+                                </td>
+
+                                <!-- Color Name -->
+                                <td style="text-align: left !important;">
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($error->Color_Name ?? '-', ENT_QUOTES) }}">
+                                        {{ strlen($error->Color_Name ?? '-') > 15 ? substr($error->Color_Name, 0, 15).'...' : ($error->Color_Name ?? '-') }}
+                                    </span>
+                                </td>
+
+                                <!-- JanCD -->
+                                <td style="text-align: center !important;" class="jancd-cell">
+                                    @php $janCode = $error->JanCD ?? '-'; @endphp
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($janCode, ENT_QUOTES) }}">
+                                        {{ strlen($janCode) > 13 ? substr($janCode, 0, 13).'...' : $janCode }}
+                                    </span>
+                                </td>
+
+                                <!-- Quantity -->
                                 <td style="text-align: right !important;" class="number-column">
-                                    {{ number_format($error->Quantity ?? 0) }}
-                                </td>
-                                <td style="text-align: left !important;" class="error-message-cell">
-                                    @if(strlen($error->Error_Msg) > 30)
-                                    <span class="truncated-error" data-bs-toggle="tooltip" data-bs-placement="top"
-                                        data-bs-title="{{ htmlspecialchars($error->Error_Msg, ENT_QUOTES) }}">
-                                        {{ substr($error->Error_Msg, 0, 30) }}...
+                                    <span data-bs-toggle="tooltip" data-bs-placement="top" title="{{ number_format($error->Quantity ?? 0) }}">
+                                        {{ number_format($error->Quantity ?? 0) }}
                                     </span>
-                                    @else
-                                    <span>{{ $error->Error_Msg }}</span>
-                                    @endif
+                                </td>
+
+                                <!-- Error Message -->
+                                <td style="text-align: left !important;" class="error-message-cell">
+                                    @php $errorMsg = $error->Error_Msg ?? '-'; @endphp
+                                    <span class="truncated-text" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="{{ htmlspecialchars($errorMsg, ENT_QUOTES) }}">
+                                        {{ strlen($errorMsg) > 30 ? substr($errorMsg, 0, 30).'...' : $errorMsg }}
+                                    </span>
                                 </td>
                             </tr>
                             @endforeach
                         </tbody>
+
                     </table>
 
                     <!-- Pagination for SKU Error Records -->
@@ -1646,26 +1679,81 @@
                                     @endif
                                 </td>
                                 <td style="text-align: center !important;">
-                                    @if($record->status == 'success' && isset($record->Item_Code) && !empty($record->Item_Code))
                                     @php
-                                    // Find the item by Item_Code to get its ID
-                                    $item = \App\Models\MItem::where('Item_Code', $record->Item_Code)->first();
+                                    $itemCode = $record->Item_Code ?? '-';
                                     @endphp
-                                    @if($item)
-                                    <a href="{{ route('mitems.edit', $item->ID) }}" class="text-primary text-decoration-none fw-bold">
-                                        {{ $item->Item_Code }}
-                                    </a>
+
+                                    @if(strlen($itemCode) > 15)
+                                    <span class="truncated-text"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-placement="top"
+                                        data-bs-title="{{ htmlspecialchars($itemCode, ENT_QUOTES) }}">
+                                        {{ substr($itemCode, 0, 15) }}...
+                                    </span>
                                     @else
-                                    {{ $record->Item_Code }}
-                                    @endif
-                                    @else
-                                    {{ $record->Item_Code ?? '-' }}
+                                    <span>{{ $itemCode }}</span>
                                     @endif
                                 </td>
-                                <td style="text-align: center !important;">{{ $record->Size_Code ?? '-' }}</td>
-                                <td style="text-align: center !important;">{{ $record->Color_Code ?? '-' }}</td>
-                                <td style="text-align: left !important;">{{ $record->Size_Name ?? '-' }}</td>
-                                <td style="text-align: left !important;">{{ $record->Color_Name ?? '-' }}</td>
+                                <td style="text-align: center !important;">
+                                    @php
+                                    $sizeCode = $record->Size_Code ?? '-';
+                                    @endphp
+
+                                    @if(strlen($sizeCode) > 10)
+                                    <span class="truncated-text"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="{{ htmlspecialchars($sizeCode, ENT_QUOTES) }}">
+                                        {{ substr($sizeCode, 0, 10) }}...
+                                    </span>
+                                    @else
+                                    <span>{{ $sizeCode }}</span>
+                                    @endif
+                                </td>
+                                <td style="text-align: center !important;">
+                                    @php
+                                    $colorCode = $record->Color_Code ?? '-';
+                                    @endphp
+
+                                    @if(strlen($colorCode) > 10)
+                                    <span class="truncated-text"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="{{ htmlspecialchars($colorCode, ENT_QUOTES) }}">
+                                        {{ substr($colorCode, 0, 10) }}...
+                                    </span>
+                                    @else
+                                    <span>{{ $colorCode }}</span>
+                                    @endif
+                                </td>
+                                <td style="text-align: left !important;">
+                                    @php
+                                    $sizeName = $record->Size_Name ?? '-';
+                                    @endphp
+
+                                    @if(strlen($sizeName) > 20)
+                                    <span class="truncated-text"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="{{ htmlspecialchars($sizeName, ENT_QUOTES) }}">
+                                        {{ substr($sizeName, 0, 20) }}...
+                                    </span>
+                                    @else
+                                    <span>{{ $sizeName }}</span>
+                                    @endif
+                                </td>
+                                <td style="text-align: left !important;">
+                                    @php
+                                    $colorName = $record->Color_Name ?? '-';
+                                    @endphp
+
+                                    @if(strlen($colorName) > 20)
+                                    <span class="truncated-text"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="{{ htmlspecialchars($colorName, ENT_QUOTES) }}">
+                                        {{ substr($colorName, 0, 20) }}...
+                                    </span>
+                                    @else
+                                    <span>{{ $colorName }}</span>
+                                    @endif
+                                </td>
                                 <td style="text-align: center !important;" class="jancd-cell">
                                     @php
                                     $janCode = $record->JanCD ?? '-';
@@ -1848,18 +1936,22 @@
         // Minimal tooltip initialization
         $(document).ready(function() {
             // Wait for everything to load
+             $(document).ready(function() {
+                    setTimeout(function() {
+                        $('[data-bs-toggle="tooltip"]').tooltip({
+                            trigger: 'hover',
+                            container: 'body',
+                            boundary: 'window',
+                            customClass: 'custom-tooltip'
+                        });
+                    }, 300);
+                });
             setTimeout(function() {
                 // Initialize all tooltips
                 initializeAllTooltips();
 
                 // Handle tooltip display on hover for truncated errors
-                $('.truncated-error, .truncated-text').hover(function() {
-                    if ($(this).attr('title')) {
-                        $(this).tooltip('show');
-                    }
-                }, function() {
-                    $(this).tooltip('hide');
-                });
+
             }, 1000);
         });
     </script>

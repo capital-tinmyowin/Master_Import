@@ -7,6 +7,7 @@
     <title>Add New Item</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <style>
         .form-group {
             position: relative;
@@ -352,7 +353,7 @@
         /* SKU Table specific styles - FIXED VERSION */
         /* SKU Table specific styles - FIXED VERSION */
         #skuPopupTable {
-            border-collapse: separate;
+            /* border-collapse: separate; */
             border-spacing: 0 10px;
             /* Add space between rows */
             width: 100%;
@@ -412,7 +413,7 @@
         #skuPopupTable .form-select {
             padding: 5px 8px !important;
             font-size: 0.875rem !important;
-            height: 32px !important;
+            height: 38px !important;
             width: 100%;
             flex-shrink: 0;
             /* Don't shrink */
@@ -602,7 +603,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <a href="{{ route('mitems.index') }}" class="btn btn-secondary mb-3">← Back</a>
 
-        <form action="{{ route('mitems.store') }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ route('mitems.store') }}" method="POST" id="SaveForm" enctype="multipart/form-data">
             @csrf
 
             <div class="row g-3">
@@ -684,7 +685,7 @@
                             <!-- Price fields with horizontal layout -->
                             <div class="form-group">
                                 <label class="form-label">定価 (List Price)</label>
-                                <div class="input-group" style="width: 200px; flex: 0 0 auto;"> 
+                                <div class="input-group" style="width: 200px; flex: 0 0 auto;">
                                     <span class="input-group-text">¥</span>
                                     <input name="ListPrice" id="ListPrice" class="form-control text-end price-input @error('ListPrice') is-invalid @enderror" value="{{ old('ListPrice') }}" required style="width: 150px;"> <!-- CHANGED HERE -->
                                     @error('ListPrice') <div class="invalid-feedback">{{ $message }}</div> @enderror
@@ -693,7 +694,7 @@
 
                             <div class="form-group">
                                 <label class="form-label">原価 (Sale Price)</label>
-                                <div class="input-group" style="width: 200px; flex: 0 0 auto;"> 
+                                <div class="input-group" style="width: 200px; flex: 0 0 auto;">
                                     <span class="input-group-text">¥</span>
                                     <input name="SalePrice" id="SalePrice" class="form-control text-end price-input @error('SalePrice') is-invalid @enderror" value="{{ old('SalePrice') }}" required style="width: 150px;"> <!-- CHANGED HERE -->
                                     @error('SalePrice') <div class="invalid-feedback">{{ $message }}</div> @enderror
@@ -770,7 +771,7 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-primary" id="addNewRowBtn">Add New Row</button>
                         <button type="button" class="btn btn-success" id="saveSkuBtn">Save</button>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-secondary" id="closePopup" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
@@ -782,7 +783,14 @@
         let skuTempData = [];
         let photoData = [];
         const MAX_PHOTOS = 5;
-        let allPhotoFiles = []; /
+        let allPhotoFiles = [];
+        const colorCodeNameMap = {}; // { colorCode: colorName }
+
+        const sizeCodeToName = {};
+        const sizeNameToCode = {};
+        const colorCodeToName = {};
+        const colorNameToCode = {};
+        const sizeColorSet = new Set();
 
         // Byte counting functions
         function getByteLength(text) {
@@ -901,7 +909,7 @@
                 </td>
                 <td>
                     <div>
-                        <input type="text" class="form-control jan" required maxlength="13">
+                        <input type="text" class="form-control jan" style="text-align:center" required maxlength="13">
                         <div class="invalid-feedback">13桁の数字</div>
                     </div>
                 </td>
@@ -1473,6 +1481,9 @@
             console.log('Files in input:', fileInput.files.length);
         }
 
+        function normalizeCode(code) {
+            return code.toString().trim().padStart(4, "0");
+        }
         document.addEventListener('DOMContentLoaded', function() {
             setupItemCodeValidation();
             setupItemCodeRealTimeValidation();
@@ -1481,7 +1492,6 @@
             setupSkuJanNumberOnly();
             setupSkuRealTimeValidation();
 
-            // Your existing price formatting code
             document.querySelectorAll(".price-input").forEach(function(input) {
                 input.addEventListener("input", function() {
                     this.value = this.value.replace(/[^\d]/g, "");
@@ -1493,6 +1503,16 @@
                 }
             });
 
+            document.addEventListener("input", function(e) {
+                if (e.target.classList.contains("size-code") || e.target.classList.contains("color-code")) {
+                    // Remove non-digit characters
+                    e.target.value = e.target.value.replace(/\D/g, '');
+                    // Limit to 4 digits
+                    if (e.target.value.length > 4) {
+                        e.target.value = e.target.value.slice(0, 4);
+                    }
+                }
+            });
             const itemNameField = document.querySelector('textarea[name="ItemName"]');
             if (itemNameField) {
                 setupByteLimitValidation(itemNameField, 200);
@@ -1508,15 +1528,43 @@
             if (makerNameField) {
                 setupByteLimitValidation(makerNameField, 100);
             }
-
-            // Event listeners
+            let workingSkuData = [];
             document.getElementById("addSkuBtn").addEventListener("click", function() {
-                var skuModal = new bootstrap.Modal(document.getElementById("skuModal"));
-                skuModal.show();
+                const tbody = document.querySelector("#skuPopupTable tbody");
+                tbody.innerHTML = "";
+                workingSkuData = skuTempData.map(sku => ({
+                    ...sku
+                }));
+                // Render only saved SKUs
+                skuTempData.forEach((sku) => {
+                    // alert(sku.Size_Name);
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><button type="button" class="btn btn-danger btn-sm deleteRow">Delete</button></td>
+                        <td><input type="text" class="form-control size-name" value="${sku.Size_Name}"></td>
+                        <td><input type="text" class="form-control color-name" value="${sku.Color_Name}"></td>
+                        <td><input type="text" class="form-control size-code" value="${sku.Size_Code}"></td>
+                        <td><input type="text" class="form-control color-code" value="${sku.Color_Code}"></td>
+                        <td><input type="text" class="form-control jan" style="text-align:center" value="${sku.JanCD}"></td>
+                        <td>
+                            <select class="form-select qty-flag">
+                                <option value="完売" ${sku.Quantity_Flag === '完売' ? 'selected' : ''}>完売 (0)</option>
+                                <option value="手入力" ${sku.Quantity_Flag === '手入力' ? 'selected' : ''}>手入力</option>
+                            </select>
+                        </td>
+                        <td><input type="number" class="form-control qty" value="${sku.Quantity}" style="text-align:right;"></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Show modal
+                new bootstrap.Modal(document.getElementById("skuModal")).show();
             });
 
             document.getElementById("addNewRowBtn").addEventListener("click", function() {
-                document.querySelector("#skuPopupTable tbody").insertAdjacentHTML("beforeend", createSkuRow());
+                document
+                    .querySelector("#skuPopupTable tbody")
+                    .insertAdjacentHTML("beforeend", createSkuRow());
             });
 
             // Delete a row
@@ -1526,123 +1574,151 @@
                 }
             });
 
-            // Save SKU popup
+            document.getElementById("closePopup").addEventListener("click", function() {
+                // Clear the SKU table body
+                const tbody = document.querySelector("#skuPopupTable tbody");
+                if (tbody) {
+                    tbody.innerHTML = "";
+                }
+            });
+
             // Save SKU popup
             document.getElementById("saveSkuBtn").addEventListener("click", function() {
-                skuTempData = [];
                 let hasError = false;
+                const nextSkuTempData = [];
+
+                const sizeCodeToName = {};
+                const sizeNameToCode = {};
+                const colorCodeToName = {};
+                const colorNameToCode = {};
+                const sizeColorSet = new Set();
 
                 // Clear previous errors
-                document.querySelectorAll("#skuPopupTable .is-invalid").forEach(el => {
-                    el.classList.remove("is-invalid");
-                });
+                document.querySelectorAll("#skuPopupTable .is-invalid").forEach(el => el.classList.remove("is-invalid"));
+                document.querySelectorAll("#skuPopupTable .invalid-feedback").forEach(el => el.style.display = 'none');
 
-                // Hide all error messages initially
-                document.querySelectorAll("#skuPopupTable .invalid-feedback").forEach(el => {
-                    el.style.display = 'none';
-                });
-
-                document.querySelectorAll("#skuPopupTable tbody tr").forEach((row, index) => {
+                document.querySelectorAll("#skuPopupTable tbody tr").forEach((row) => {
                     const sizeName = row.querySelector(".size-name");
                     const colorName = row.querySelector(".color-name");
                     const sizeCode = row.querySelector(".size-code");
                     const colorCode = row.querySelector(".color-code");
                     const janCode = row.querySelector(".jan");
                     const quantity = row.querySelector(".qty");
-                    const rowNumber = index + 1;
 
                     let rowHasError = false;
 
-                    // Validate all required fields
+                    // -------------------------
+                    // Required field validation
+                    // -------------------------
                     if (!sizeName.value.trim()) {
                         sizeName.classList.add("is-invalid");
                         rowHasError = true;
                     }
-
                     if (!colorName.value.trim()) {
                         colorName.classList.add("is-invalid");
                         rowHasError = true;
                     }
-
                     if (!sizeCode.value.trim()) {
                         sizeCode.classList.add("is-invalid");
                         rowHasError = true;
                     }
-
                     if (!colorCode.value.trim()) {
                         colorCode.classList.add("is-invalid");
                         rowHasError = true;
                     }
-
-                    // Validate JAN code
-                    if (!janCode.value.trim()) {
-                        janCode.classList.add("is-invalid");
-                        rowHasError = true;
-                    } else if (!/^\d{13}$/.test(janCode.value.trim())) {
+                    if (!janCode.value.trim() || !/^\d{13}$/.test(janCode.value.trim())) {
                         janCode.classList.add("is-invalid");
                         rowHasError = true;
                     }
-
-                    // Validate quantity
                     if (!quantity.value && quantity.value !== 0) {
                         quantity.classList.add("is-invalid");
                         rowHasError = true;
                     }
 
-                    if (rowHasError) {
-                        hasError = true;
+                    // -------------------------
+                    // Normalize codes and names
+                    // -------------------------
+                    const sc = normalizeCode(sizeCode.value.trim());
+                    const cc = normalizeCode(colorCode.value.trim());
+                    const sn = sizeName.value.trim();
+                    const cn = colorName.value.trim();
 
-                        // Show error messages for invalid fields in this row
-                        if (sizeName.classList.contains('is-invalid')) {
-                            sizeName.nextElementSibling.style.display = 'block';
-                        }
-                        if (colorName.classList.contains('is-invalid')) {
-                            colorName.nextElementSibling.style.display = 'block';
-                        }
-                        if (sizeCode.classList.contains('is-invalid')) {
-                            sizeCode.nextElementSibling.style.display = 'block';
-                        }
-                        if (colorCode.classList.contains('is-invalid')) {
-                            colorCode.nextElementSibling.style.display = 'block';
-                        }
-                        if (janCode.classList.contains('is-invalid')) {
-                            janCode.nextElementSibling.style.display = 'block';
-                        }
-                        if (quantity.classList.contains('is-invalid')) {
-                            quantity.nextElementSibling.style.display = 'block';
+                    // -------------------------
+                    // 🔥 FINAL STRICT SKU VALIDATION (GLOBAL)
+                    // -------------------------
+
+                    // 1️⃣ SizeCode ↔ SizeName must match globally
+                    if (sc && sn) {
+                        if ((sizeCodeToName[sc] && sizeCodeToName[sc] !== sn) ||
+                            (sizeNameToCode[sn] && sizeNameToCode[sn] !== sc)) {
+                            sizeCode.classList.add("is-invalid");
+                            sizeName.classList.add("is-invalid");
+                            rowHasError = true;
                         }
                     }
 
-                    skuTempData.push({
-                        Size_Name: sizeName.value.trim(),
-                        Color_Name: colorName.value.trim(),
-                        Size_Code: sizeCode.value.trim(),
-                        Color_Code: colorCode.value.trim(),
-                        JanCD: janCode.value.trim(),
-                        Quantity: quantity.value,
-                    });
+                    // 2️⃣ ColorCode ↔ ColorName must match globally
+                    if (cc && cn) {
+                        if ((colorCodeToName[cc] && colorCodeToName[cc] !== cn) ||
+                            (colorNameToCode[cn] && colorNameToCode[cn] !== cc)) {
+                            colorCode.classList.add("is-invalid");
+                            colorName.classList.add("is-invalid");
+                            rowHasError = true;
+                        }
+                    }
+
+                    // 3️⃣ SizeCode + ColorCode combination must be unique globally
+                    if (sc && cc) {
+                        const key = `${sc}|${cc}`;
+                        if (sizeColorSet.has(key)) {
+                            sizeCode.classList.add("is-invalid");
+                            colorCode.classList.add("is-invalid");
+                            rowHasError = true;
+                        }
+                    }
+
+                    // -------------------------
+                    // Save only valid rows
+                    // -------------------------
+                    if (!rowHasError) {
+                        sizeCodeToName[sc] = sn;
+                        sizeNameToCode[sn] = sc;
+                        colorCodeToName[cc] = cn;
+                        colorNameToCode[cn] = cc;
+                        sizeColorSet.add(`${sc}|${cc}`);
+
+                        nextSkuTempData.push({
+                            Size_Name: sn,
+                            Color_Name: cn,
+                            Size_Code: sc,
+                            Color_Code: cc,
+                            JanCD: janCode.value.trim(),
+                            Quantity: quantity.value,
+                        });
+                    } else {
+                        hasError = true;
+                    }
                 });
 
-                if (hasError) {
-                    // Scroll to first error
-                    const firstError = document.querySelector("#skuPopupTable .is-invalid");
-                    if (firstError) {
-                        const errorCell = firstError.closest('td');
-                        if (errorCell) {
-                            errorCell.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'center'
-                            });
-                        }
-                    }
-                    return; // Don't proceed if there are errors
-                }
+                // -------------------------
+                // If any row invalid, stop save
+                // -------------------------
+                if (hasError) return;
 
-                // If no errors, proceed
+                // -------------------------
+                // Commit changes to main temp data
+                // -------------------------
+                skuTempData = nextSkuTempData;
+
                 renderSkuMatrix();
                 bootstrap.Modal.getInstance(document.getElementById("skuModal")).hide();
+                document.querySelector("#skuPopupTable tbody").innerHTML = "";
             });
 
+            const skuModalEl = document.getElementById("skuModal");
+            skuModalEl.addEventListener("hidden.bs.modal", function() {
+                document.querySelector("#skuPopupTable tbody").innerHTML = "";
+            });
             // Add real-time validation for SKU fields
             function setupSkuRealTimeValidation() {
                 // Listen for input events in the SKU modal
@@ -1736,11 +1812,47 @@
                 }
 
                 // Validate SKU JAN codes
-                // Validate SKU JAN codes
+                const sizeCodeMap = {};
+                const colorCodeMap = {};
+                const sizeColorSet = new Set();
                 let hasSkuJanErrors = false;
                 skuTempData.forEach((sku, index) => {
                     if (sku.JanCD && !/^\d{13}$/.test(sku.JanCD)) {
                         hasSkuJanErrors = true;
+                    }
+                    const sizeCode = sku.Size_Code;
+                    const sizeName = sku.Size_Name;
+                    const colorCode = sku.Color_Code;
+                    const colorName = sku.Color_Name;
+
+                    const row = document.querySelectorAll("#skuPopupTable tbody tr")[index];
+
+                    // 1️⃣ Size Code → Size Name must be 1:1
+                    if (sizeCodeMap[sizeCode] && sizeCodeMap[sizeCode] !== sizeName) {
+                        row.querySelector(".size-code").classList.add("is-invalid");
+                        row.querySelector(".size-name").classList.add("is-invalid");
+                        hasSkuJanErrors = true;
+                    } else {
+                        sizeCodeMap[sizeCode] = sizeName;
+                    }
+
+                    // 2️⃣ Color Code → Color Name must be 1:1
+                    if (colorCodeMap[colorCode] && colorCodeMap[colorCode] !== colorName) {
+                        row.querySelector(".color-code").classList.add("is-invalid");
+                        row.querySelector(".color-name").classList.add("is-invalid");
+                        hasSkuJanErrors = true;
+                    } else {
+                        colorCodeMap[colorCode] = colorName;
+                    }
+
+                    // 3️⃣ Size Code + Color Code must be unique
+                    const combinationKey = `${sizeCode}_${colorCode}`;
+                    if (sizeColorSet.has(combinationKey)) {
+                        row.querySelector(".size-code").classList.add("is-invalid");
+                        row.querySelector(".color-code").classList.add("is-invalid");
+                        hasSkuJanErrors = true;
+                    } else {
+                        sizeColorSet.add(combinationKey);
                     }
                 });
 
@@ -1804,7 +1916,8 @@
                 document.getElementById("skuQuantity").value = JSON.stringify(qtys);
 
                 // Create FormData
-                const form = document.querySelector('form');
+                // const form = document.querySelector('form');
+                const form = document.getElementById('SaveForm');
                 const formData = new FormData(form);
 
                 // Remove existing Photos[] entries
@@ -1955,6 +2068,24 @@
                 }
             });
         });
+
+        function canAddSku(newSku) {
+            for (let sku of skuTempData) {
+                // 1️⃣ Check duplicate combination of size code + color code
+                if (sku.Size_Code === newSku.Size_Code && sku.Color_Code === newSku.Color_Code) {
+                    alert(`Cannot save: Size Code "${newSku.Size_Code}" with Color Code "${newSku.Color_Code}" already exists.`);
+                    return false;
+                }
+
+                // 2️⃣ Check size code consistency with size name
+                if (sku.Size_Code === newSku.Size_Code && sku.Size_Name !== newSku.Size_Name) {
+                    alert(`Cannot save: Size Code "${newSku.Size_Code}" is already used with Size Name "${sku.Size_Name}".`);
+                    return false;
+                }
+            }
+
+            return true;
+        }
     </script>
 </body>
 

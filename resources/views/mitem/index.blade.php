@@ -3,6 +3,7 @@
 
 <head>
     <title>M_Item List</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -37,17 +38,71 @@
             overflow-y: auto;
         }
 
-        /* Custom column widths */
+        /* Force fixed table layout */
+        .table {
+            table-layout: fixed;
+            /* key to prevent column width changes */
+            width: 100%;
+        }
+
+        .table td,
+        .table th {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Fixed width columns */
+        .table th:nth-child(1),
+        .table td:nth-child(1) {
+            min-width: 50px;
+            max-width: 50px;
+        }
+
+        .table th:nth-child(2),
+        .table td:nth-child(2) {
+            min-width: 100px !important;
+            max-width: 100px !important;
+        }
+
         .table th:nth-child(3),
         .table td:nth-child(3) {
-            width: 120px;
+            min-width: 200px;
+            max-width: 200px;
+        }
+
+        .table th:nth-child(4),
+        .table td:nth-child(4) {
+            min-width: 140px;
+            max-width: 140px;
+            text-align: center;
         }
 
         .table th:nth-child(5),
         .table td:nth-child(5) {
-            width: 300px;
+            min-width: 150px;
+            max-width: 150px;
+        }
+
+        .table th:nth-child(6),
+        .table td:nth-child(6) {
+            min-width: 300px;
             max-width: 300px;
         }
+
+        .table th:nth-child(7),
+        .table td:nth-child(7) {
+            min-width: 100px;
+            max-width: 100px;
+        }
+
+        .table th:nth-child(8),
+        .table td:nth-child(8) {
+            min-width: 100px;
+            max-width: 100px;
+        }
+
+
 
         .sort-arrow {
             font-size: 12px;
@@ -87,22 +142,55 @@
 
     <div class="container mt-5">
         <h2 class="mb-4">M Item</h2>
-
+        @if(session('error'))
+        <div class="alert alert-warning alert-dismissible fade show">
+            {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        @endif
         @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+
+        <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
             <!-- Filter Form (Left Side) -->
-            <form action="{{ route('mitems.index') }}" method="GET" class="d-flex align-items-center gap-2 flex-wrap" id="filterForm">
-                <div class="d-flex align-items-center gap-2">
-                    <label for="Item_Code" class="form-label mb-0 fw-semibold" style="white-space: nowrap;">商品番号:</label>
-                    <input type="text" id="Item_Code" name="Item_Code" class="form-control form-control-sm" value="{{ request('Item_Code') }}" style="width:150px;">
+            <form action="{{ route('mitems.index') }}" method="GET" class="d-flex align-items-start gap-2 flex-wrap" id="filterForm">
+                <div class="d-flex align-items-start gap-2">
+                    <!-- Label + LIKE checkbox (vertical) -->
+                    <div>
+                        <label for="Item_Code"
+                            class="form-label fw-semibold mb-1"
+                            style="white-space: nowrap;">
+                            商品番号
+                        </label>
+
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                type="checkbox"
+                                id="use_like_search"
+                                name="use_like_search"
+                                value="1"
+                                {{ request('use_like_search') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="use_like_search">
+                                LIKE
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Textarea -->
+                    <textarea id="Item_Code"
+                        name="Item_Code"
+                        class="form-control form-control-sm"
+                        rows="2"
+                        style="width:310px; resize: vertical; height:95px !important;">{{ request('Item_Code') }}</textarea>
+
                 </div>
 
-                <div class="d-flex align-items-center gap-2">
+
+                <div class="d-flex align-items-start gap-2" style="height: 90px !important;">
                     <label for="ItemName" class="form-label mb-0 fw-semibold" style="white-space: nowrap;">商品名:</label>
-                    <input type="text" id="ItemName" name="ItemName" class="form-control form-control-sm" value="{{ request('ItemName') }}" style="width:200px;">
+                    <input type="text" id="ItemName" name="ItemName" class="form-control form-control-sm" value="{{ request('ItemName') }}" style="width:265px;">
                 </div>
 
                 <!-- Hidden inputs for sorting -->
@@ -113,37 +201,79 @@
             </form>
 
             <!-- Right Side Buttons -->
-            <div class="d-flex align-items-center gap-3 flex-wrap">
-                <!-- Export Excel Button -->
-                <form action="{{ route('mitems.export.excel') }}" method="GET" class="d-inline" id="exportExcelForm">
-                    <input type="hidden" name="Item_Code" value="{{ request('Item_Code') }}">
-                    <input type="hidden" name="ItemName" value="{{ request('ItemName') }}">
-                    <input type="hidden" name="sort_by" value="{{ request('sort_by') }}">
-                    <input type="hidden" name="sort_order" value="{{ request('sort_order') }}">
-                    <button type="submit" class="btn btn-sm btn-success">
-                        <i class="fas fa-file-excel"></i> Export Excel
-                    </button>
-                </form>
+            <div class="d-flex flex-column align-items-start gap-2 flex-wrap">
 
-                <!-- Export CSV Button -->
-                <form action="{{ route('mitems.export.csv') }}" method="GET" class="d-inline" id="exportCsvForm">
-                    <input type="hidden" name="Item_Code" value="{{ request('Item_Code') }}">
-                    <input type="hidden" name="ItemName" value="{{ request('ItemName') }}">
-                    <input type="hidden" name="sort_by" value="{{ request('sort_by') }}">
-                    <input type="hidden" name="sort_order" value="{{ request('sort_order') }}">
-                    <button type="submit" class="btn btn-sm btn-info">
-                        <i class="fas fa-file-csv"></i> Export CSV
-                    </button>
-                </form>
+                <!-- Export Buttons Row -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <!-- Export Excel Button -->
+                    <form action="{{ route('mitems.export.excel') }}" method="GET" class="d-inline" id="exportExcelForm">
+                        <input type="hidden" name="Item_Code" value="{{ request('Item_Code') }}">
+                        <input type="hidden" name="ItemName" value="{{ request('ItemName') }}">
+                        <input type="hidden" name="sort_by" value="{{ request('sort_by') }}">
+                        <input type="hidden" name="sort_order" value="{{ request('sort_order') }}">
+                        <input type="hidden" name="excel_type" value="">
+                        <input type="hidden" name="use_like_search" value="{{ request('use_like_search') }}">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </form>
 
-                <!-- Add New Button -->
-                <a href="{{ route('mitems.create') }}" class="btn btn-sm btn-primary">+ Add New</a>
+                    <!-- Export CSV Button -->
+                    <form action="{{ route('mitems.export.csv') }}" method="GET" class="d-inline" id="exportCsvForm">
+                        <input type="hidden" name="Item_Code" value="{{ request('Item_Code') }}">
+                        <input type="hidden" name="ItemName" value="{{ request('ItemName') }}">
+                        <input type="hidden" name="sort_by" value="{{ request('sort_by') }}">
+                        <input type="hidden" name="sort_order" value="{{ request('sort_order') }}">
+                        <input type="hidden" name="excel_type" value="">
+                        <input type="hidden" name="use_like_search" value="{{ request('use_like_search') }}">
+                        <button type="submit" class="btn btn-sm btn-info">
+                            <i class="fas fa-file-csv"></i> Export CSV
+                        </button>
+                    </form>
+
+                    <!-- Add New -->
+                    <a href="{{ route('mitems.create') }}" class="btn btn-sm btn-primary">+ Add New</a>
+
+                    <!-- Delete -->
+                    <button type="button" class="btn btn-sm btn-danger" id="deleteSelectedBtn" disabled>
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </div>
+
+                <!-- Excel Type Checkboxes (UNDER buttons) -->
+                <div class="d-flex gap-3 mt-3">
+                    <div class="form-check">
+                        <input class="form-check-input"
+                            type="checkbox"
+                            name="excel_type[]"
+                            value="item"
+                            id="excelItem"
+                            checked>
+                        <label class="form-check-label" for="excelItem">
+                            Item
+                        </label>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                            type="checkbox"
+                            name="excel_type[]"
+                            value="sku"
+                            id="excelSku">
+                        <label class="form-check-label" for="excelSku">
+                            SKU
+                        </label>
+                    </div>
+                </div>
             </div>
+
         </div>
 
         <table class="table table-bordered table-hover align-middle">
             <thead class="table-dark text-center">
                 <tr>
+                    <th style="width: 50px;">
+                    </th>
                     <th>商品番号</th>
                     <th>商品名</th>
                     <th style="width: 120px;">JANCD</th>
@@ -169,15 +299,24 @@
             <tbody>
                 @foreach($items as $item)
                 <tr>
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input item-checkbox" value="{{ $item->ID }}" autocomplete="off">
+                    </td>
                     <td class="text-start">
                         <a href="{{ route('mitems.edit', $item->ID) }}" class="text-primary text-decoration-none fw-bold">
                             {{ $item->Item_Code }}
                         </a>
                     </td>
-                    <td class="text-start">{{ $item->ItemName }}</td>
+                    <td class="text-start" style="max-width: 300px;" data-bs-toggle="tooltip" title="{{ $item->ItemName }}">
+                        {{ $item->ItemName }}
+                    </td>
                     <td class="text-start" style="width: 120px;">{{ $item->JanCD }}</td>
-                    <td class="text-start">{{ $item->MakerName }}</td>
-                    <td class="text-start" style="width: 300px; max-width: 300px;">{{ $item->Memo }}</td>
+                    <td class="text-start" style="max-width: 200px;" data-bs-toggle="tooltip" title="{{ $item->MakerName }}">
+                        {{ $item->MakerName }}
+                    </td>
+                    <td class="text-start" style="max-width: 300px;" data-bs-toggle="tooltip" title="{{ $item->Memo }}">
+                        {{ $item->Memo }}
+                    </td>
                     <td class="text-end">{{ number_format($item->ListPrice) }}</td>
                     <td class="text-end">{{ number_format($item->SalePrice) }}</td>
                 </tr>
@@ -475,6 +614,96 @@
 
         // Document ready function
         document.addEventListener('DOMContentLoaded', function() {
+
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function(tooltipTriggerEl) {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            const textarea = document.getElementById('Item_Code');
+            const form = document.getElementById('filterForm');
+
+            textarea.addEventListener('keydown', function(e) {
+                // Enter = submit
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); // stop new line
+                    form.submit();
+                }
+            });
+
+            // Fix for export forms - handle unchecked checkbox
+            const exportForms = document.querySelectorAll('#exportExcelForm, #exportCsvForm');
+
+            // Initialize export form values based on current checkbox state
+            const useLikeCheckbox = document.getElementById('use_like_search');
+
+            exportForms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    // Update the hidden input value before submit
+                    const hiddenInput = this.querySelector('input[name="use_like_search"]');
+                    if (hiddenInput) {
+                        hiddenInput.value = useLikeCheckbox.checked ? '1' : '0';
+                    }
+                    const itemCodeHidden = this.querySelector('input[name="Item_Code"]');
+                    if (itemCodeHidden && itemCodeInput) {
+                        itemCodeHidden.value = itemCodeInput.value.trim();
+                    }
+
+                    /* =====================
+                       ITEM NAME
+                    ===================== */
+                    const itemNameHidden = this.querySelector('input[name="ItemName"]');
+                    if (itemNameHidden && itemNameInput) {
+                        itemNameHidden.value = itemNameInput.value.trim();
+                    }
+                });
+
+            });
+
+            // Update export forms when checkbox changes
+            if (useLikeCheckbox) {
+                useLikeCheckbox.addEventListener('change', function() {
+                    const value = this.checked ? '1' : '0';
+                    exportForms.forEach(form => {
+                        const hiddenInput = form.querySelector('input[name="use_like_search"]');
+                        if (hiddenInput) {
+                            hiddenInput.value = value;
+                        }
+                    });
+                });
+            }
+
+            const itemCodeInput = document.getElementById('Item_Code');
+            if (itemCodeInput) {
+                itemCodeInput.addEventListener('input', function() {
+                    const value = this.value;
+                    // alert(value);
+                    exportForms.forEach(form => {
+                        const hiddenInput = form.querySelector('input[name="Item_Code"]');
+                        if (hiddenInput) {
+                            hiddenInput.value = value;
+                        }
+                    });
+                });
+            }
+
+
+            document.querySelectorAll('input[name="excel_type[]"]').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    // uncheck the other checkbox
+                    document.querySelectorAll('input[name="excel_type[]"]').forEach(other => {
+                        if (other !== this) other.checked = false;
+                    });
+
+                    // update hidden excel_type for both forms
+                    const value = this.checked ? this.value : '';
+
+                    document.querySelectorAll('form input[name="excel_type"]').forEach(input => {
+                        input.value = value;
+                    });
+                });
+            });
+
             // Export form loading states
             const excelForm = document.getElementById('exportExcelForm');
             if (excelForm) {
@@ -482,7 +711,7 @@
                     const button = this.querySelector('button[type="submit"]');
                     const originalText = button.innerHTML;
 
-                    button.innerHTML = '⏳ Preparing Excel...';
+                    button.innerHTML = '⏳ Preparing...';
                     button.disabled = true;
 
                     // Re-enable after 5 seconds in case of error
@@ -499,7 +728,7 @@
                     const button = this.querySelector('button[type="submit"]');
                     const originalText = button.innerHTML;
 
-                    button.innerHTML = '⏳ Preparing CSV...';
+                    button.innerHTML = '⏳ Preparing...';
                     button.disabled = true;
 
                     // Re-enable after 5 seconds in case of error
@@ -510,24 +739,104 @@
                 });
             }
 
-            // Sync filter form with export forms
-            const filterForm = document.getElementById('filterForm');
-            const exportForms = [excelForm, csvForm];
+            const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+            const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
 
-            if (filterForm) {
-                exportForms.forEach(exportForm => {
-                    if (exportForm) {
-                        // Update export form when filter form changes
-                        filterForm.addEventListener('input', function() {
-                            const formData = new FormData(filterForm);
-                            exportForm.querySelector('input[name="Item_Code"]').value = formData.get('Item_Code') || '';
-                            exportForm.querySelector('input[name="ItemName"]').value = formData.get('ItemName') || '';
-                            exportForm.querySelector('input[name="sort_by"]').value = formData.get('sort_by') || '';
-                            exportForm.querySelector('input[name="sort_order"]').value = formData.get('sort_order') || '';
-                        });
+            // Individual checkbox change
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    updateDeleteButtonState();
+                });
+            });
+
+            // Delete selected button click
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.addEventListener('click', function() {
+                    const selectedIds = getSelectedItemIds();
+
+                    if (selectedIds.length === 0) {
+                        return;
+                    }
+
+                    // Simple confirmation
+                    if (confirm('Delete selected items?')) {
+                        deleteSelectedItems(selectedIds);
                     }
                 });
             }
+
+            function getSelectedItemIds() {
+                const selectedIds = [];
+                document.querySelectorAll('.item-checkbox:checked').forEach(checkbox => {
+                    selectedIds.push(checkbox.value);
+                });
+                return selectedIds;
+            }
+
+            function updateDeleteButtonState() {
+                const selectedCount = getSelectedItemIds().length;
+                deleteSelectedBtn.disabled = selectedCount === 0;
+            }
+
+            function deleteSelectedItems(ids) {
+                const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+                if (!deleteSelectedBtn) return;
+
+                if (!ids || ids.length === 0) {
+                    alert('No items selected.');
+                    return;
+                }
+
+                // Save original button HTML
+                const originalHtml = deleteSelectedBtn.innerHTML;
+                deleteSelectedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                deleteSelectedBtn.disabled = true;
+
+                fetch('{{ route("mitems.delete-multiple") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({
+                            ids: ids
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Clear all checkboxes
+                            document.querySelectorAll('.item-checkbox:checked').forEach(cb => cb.checked = false);
+
+                            // Determine current page
+                            const currentPage = parseInt(new URLSearchParams(window.location.search).get('page')) || 1;
+                            const remainingRows = document.querySelectorAll('.item-row').length - ids.length;
+
+                            // If last page is now empty, go to previous page
+                            if (remainingRows <= 0 && currentPage > 1) {
+                                const url = new URL(window.location.href);
+                                url.searchParams.set('page', currentPage - 1);
+                                window.location.href = url.toString();
+                            } else {
+                                // Otherwise, just reload current page
+                                window.location.reload();
+                            }
+                        } else {
+                            alert('Delete failed.');
+                            deleteSelectedBtn.innerHTML = originalHtml;
+                            deleteSelectedBtn.disabled = false;
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert('Delete failed.');
+                        deleteSelectedBtn.innerHTML = originalHtml;
+                        deleteSelectedBtn.disabled = false;
+                    });
+            }
+
+            // Sync filter form with export forms
+            const filterForm = document.getElementById('filterForm');
 
             // Sorting functionality
             const sortButtons = document.querySelectorAll('.sort-btn');

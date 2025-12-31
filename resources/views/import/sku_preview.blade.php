@@ -21,7 +21,6 @@
             margin-bottom: 0;
             width: 100%;
             min-width: 1000px;
-            /* Ensure minimum width for all columns */
             border-collapse: separate;
             border-spacing: 0;
         }
@@ -102,7 +101,6 @@
             line-height: 1.4;
         }
 
-        /* Optionally style the tooltip itself */
         .tooltip-inner {
             max-width: 300px !important;
             text-align: left !important;
@@ -209,8 +207,18 @@
         @media (max-width: 1200px) {
             .preview-table {
                 min-width: 1000px;
-                /* Keep minimum width for readability */
             }
+        }
+
+        .truncate {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            /* ← FIX */
+            max-width: 150px;
+            cursor: pointer;
+            /* optional UX improvement */
         }
     </style>
 </head>
@@ -222,7 +230,6 @@
         <h3 class="mb-4">
             <i class="fas fa-eye text-primary"></i> SKU Import Preview
         </h3>
-
         <!-- Summary Card -->
         <div class="card summary-card">
             <div class="card-body">
@@ -255,15 +262,17 @@
             <table class="table table-bordered table-hover preview-table">
                 <thead>
                     <tr>
-                        <th class="text-center col-1">Row #</th>
-                        <th class="text-center col-2">Item Code</th>
-                        <th class="text-center col-3">Size Code</th>
-                        <th class="text-center col-4">Size Name</th>
-                        <th class="text-center col-5">Color Code</th>
-                        <th class="text-center col-6">Color Name</th>
-                        <th class="text-center col-7">JanCD</th>
-                        <th class="text-center col-8">Quantity</th>
-                        <th class="text-center col-9">Status</th>
+                        <th class="text-center">Row #</th>
+                        <th class="text-center">Item Admin Code</th>
+                        <th class="text-center">Item Code</th>
+                        <th class="text-center">Size Code</th>
+                        <th class="text-center">Color Code</th>
+
+                        <th class="text-center">Size Name</th>
+                        <th class="text-center">Color Name</th>
+                        <th class="text-center">JanCD</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -290,27 +299,107 @@
                     }
                     @endphp
                     <tr class="{{ $rowClass }}">
-                        <td class="col-1 text-center">{{ $item['row_number'] }}</td>
-                        <td class="col-2 text-center">{{ $item['item_code'] ?? '' }}</td>
-                        <td class="col-3 text-center">{{ $item['size_code'] ?? '' }}</td>
-                        <td class="col-4">{{ $item['size_name'] ?? '' }}</td>
-                        <td class="col-5 text-center">{{ $item['color_code'] ?? '' }}</td>
-                        <td class="col-6">{{ $item['color_name'] ?? '' }}</td>
-                        <td class="col-7 text-center">{{ $item['jancd'] ?? '' }}</td>
-                        <td class="col-8 text-end">{{ number_format($item['quantity'], 0) }}</td>
-                        <td class="col-9">
-                            <span style="vertical-align: middle;">{!! $statusIcon !!}</span>
-                            @if($hasError && !empty($errorMessages))
-                            <span class="error-tooltip ms-1" style="vertical-align: middle;"
+                        <td class="text-center">{{ $item['row_number'] - 1 }}</td>
+                        <td class="col-maker-name text-center">
+                            <span class="truncate"
                                 data-bs-toggle="tooltip"
-                                data-bs-html="true"
-                                title="{{ implode(' ', $errorMessages) }}">
-                                {{ $status }}: {{ implode(', ', array_slice($errorMessages, 0, 2)) }}{{ count($errorMessages) > 2 ? '...' : '' }}
+                                data-bs-placement="top" style="max-width: 130px; min-width: 130px;"
+                                title="{{ $item['item_code'] ?? '' }}">
+                                {{ $item['item_admin_code'] ?? '' }}
                             </span>
-                            @else
-                            <span class="ms-1" style="vertical-align: middle;">{{ $status }}</span>
-                            @endif
                         </td>
+                        <td class="col-maker-name text-left">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 100px; min-width: 100px;"
+                                title="{{ $item['item_code'] ?? '' }}">
+                                {{ $item['item_code'] ?? '' }}
+                            </span>
+                        </td>
+
+                        <!-- <td class="col-2 text-center">{{ $item['item_code'] ?? '' }}</td> -->
+                        <!-- <td class="col-3 text-center">{{ $item['size_code'] ?? '' }}</td> -->
+                        <td class="col-maker-name text-center">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 100px; min-width: 100px;"
+                                title="{{ $item['size_code'] ?? '' }}">
+                                {{ $item['size_code'] ?? '' }}
+                            </span>
+                        </td>
+                        <td class="col-maker-name text-center">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 100px; min-width: 100px;"
+                                title="{{ $item['color_code'] ?? '' }}">
+                                {{ $item['color_code'] ?? '' }}
+                            </span>
+                        </td>
+                        <!-- <td class="col-4">{{ $item['size_name'] ?? '' }}</td> -->
+                        <td class="col-maker-name text-left">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 130px; min-width: 130px;"
+                                title="{{ $item['size_name'] ?? '' }}">
+                                {{ $item['size_name'] ?? '' }}
+                            </span>
+                        </td>
+
+
+                        <!-- <td class="col-5 text-center">{{ $item['color_code'] ?? '' }}</td> -->
+                        <!-- <td class="col-6">{{ $item['color_name'] ?? '' }}</td> -->
+                        <td class="col-maker-name text-left">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 130px; min-width: 130px;"
+                                title="{{ $item['color_name'] ?? '' }}">
+                                {{ $item['color_name'] ?? '' }}
+                            </span>
+                        </td>
+                        <td class="col-maker-name text-center">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 130px; min-width: 130px;"
+                                title="{{ $item['jancd'] ?? '' }}">
+                                {{ $item['jancd'] ?? '' }}
+                            </span>
+                        </td>
+                        <!-- <td class="col-7 text-center">{{ $item['jancd'] ?? '' }}</td> -->
+                        <td class="col-maker-name text-right">
+                            <span class="truncate"
+                                data-bs-toggle="tooltip"
+                                data-bs-placement="top" style="max-width: 100px; min-width: 80px; text-align: right;"
+                                title="{{ $item['quantity'] ?? '' }}">
+                                {{ $item['quantity'] ?? '' }}
+                            </span>
+                        </td>
+                        <!-- <td class="col-8 text-end">{{ number_format($item['quantity'], 0) }}</td> -->
+                        <td>
+                            @php
+                            $hasError = $item['Is_Valid'] == 0;
+                            $statusIcon = $hasError
+                            ? '<i class="fas fa-times-circle text-danger"></i>'
+                            : '<i class="fas fa-check-circle text-success"></i>';
+                            $statusText = $hasError ? 'Error' : 'Valid';
+                            $statusMessage = $item['Status_Message']; // full SP error messages
+                            @endphp
+
+                            <div class="d-flex align-items-center">
+                                <span>{!! $statusIcon !!}</span>
+                                @if($hasError)
+                                <span class="ms-1 error-tooltip truncate"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-html="true"
+                                    title="{{ $statusMessage }}">
+                                    {{ \Illuminate\Support\Str::limit($statusMessage, 50) }}
+                                </span>
+                                @else
+                                <span class="ms-1">{{ $statusText }}</span>
+                                @endif
+                            </div>
+
+                        </td>
+
                     </tr>
                     @endforeach
                 </tbody>
@@ -319,77 +408,72 @@
 
         <!-- Pagination -->
         @if($previewData->hasPages())
-        <div class="mt-3">
-            <nav aria-label="Preview pagination">
-                <ul class="pagination justify-content-end mb-0">
-                    {{-- Previous Page Link --}}
-                    @if($previewData->onFirstPage())
-                    <li class="page-item disabled">
-                        <span class="page-link">&laquo;</span>
-                    </li>
+        <div class="mt-3 d-flex justify-content-between align-items-center">
+            {{-- Pagination info --}}
+            <div class="small text-muted">
+                Showing
+                {{ $previewData->firstItem() }}
+                @if ($previewData->lastItem() !== $previewData->firstItem())
+                to {{ $previewData->lastItem() }}
+                @endif
+                of {{ $previewData->total() }}
+            </div>
+
+            {{-- Pagination links --}}
+            <ul class="pagination mb-0">
+                {{-- Previous Page Link --}}
+                @if($previewData->onFirstPage())
+                <li class="page-item disabled">
+                    <span class="page-link">&laquo;</span>
+                </li>
+                @else
+                <li class="page-item">
+                    <a class="page-link" href="{{ $previewData->previousPageUrl() }}" rel="prev">&laquo;</a>
+                </li>
+                @endif
+
+                {{-- Pagination Elements --}}
+                @php
+                $currentPage = $previewData->currentPage();
+                $lastPage = $previewData->lastPage();
+                $startPage = max(1, $currentPage - 2);
+                $endPage = min($lastPage, $currentPage + 2);
+                @endphp
+
+                @if($startPage > 1)
+                <li class="page-item"><a class="page-link" href="{{ $previewData->url(1) }}">1</a></li>
+                @if($startPage > 2)
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                @endif
+                @endif
+
+                @for($page = $startPage; $page <= $endPage; $page++)
+                    @if($page==$currentPage)
+                    <li class="page-item active"><span class="page-link">{{ $page }}</span></li>
                     @else
-                    <li class="page-item">
-                        <a class="page-link" href="{{ $previewData->previousPageUrl() }}" rel="prev">&laquo;</a>
-                    </li>
+                    <li class="page-item"><a class="page-link" href="{{ $previewData->url($page) }}">{{ $page }}</a></li>
                     @endif
+                    @endfor
 
-                    {{-- Pagination Elements --}}
-                    @php
-                    // Show limited page numbers
-                    $currentPage = $previewData->currentPage();
-                    $lastPage = $previewData->lastPage();
-                    $startPage = max(1, $currentPage - 2);
-                    $endPage = min($lastPage, $currentPage + 2);
-                    @endphp
+                    @if($endPage < $lastPage)
+                        @if($endPage < $lastPage - 1)
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                        @endif
+                        <li class="page-item"><a class="page-link" href="{{ $previewData->url($lastPage) }}">{{ $lastPage }}</a></li>
+                        @endif
 
-                    @if($startPage > 1)
-                    <li class="page-item">
-                        <a class="page-link" href="{{ $previewData->url(1) }}">1</a>
-                    </li>
-                    @if($startPage > 2)
-                    <li class="page-item disabled">
-                        <span class="page-link">...</span>
-                    </li>
-                    @endif
-                    @endif
-
-                    @for($page = $startPage; $page <= $endPage; $page++)
-                        @if($page==$currentPage)
-                        <li class="page-item active">
-                        <span class="page-link">{{ $page }}</span>
+                        {{-- Next Page Link --}}
+                        @if($previewData->hasMorePages())
+                        <li class="page-item">
+                            <a class="page-link" href="{{ $previewData->nextPageUrl() }}" rel="next">&raquo;</a>
                         </li>
                         @else
-                        <li class="page-item">
-                            <a class="page-link" href="{{ $previewData->url($page) }}">{{ $page }}</a>
-                        </li>
+                        <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
                         @endif
-                        @endfor
-
-                        @if($endPage < $lastPage)
-                            @if($endPage < $lastPage - 1)
-                            <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                            </li>
-                            @endif
-                            <li class="page-item">
-                                <a class="page-link" href="{{ $previewData->url($lastPage) }}">{{ $lastPage }}</a>
-                            </li>
-                            @endif
-
-                            {{-- Next Page Link --}}
-                            @if($previewData->hasMorePages())
-                            <li class="page-item">
-                                <a class="page-link" href="{{ $previewData->nextPageUrl() }}" rel="next">&raquo;</a>
-                            </li>
-                            @else
-                            <li class="page-item disabled">
-                                <span class="page-link">&raquo;</span>
-                            </li>
-                            @endif
-                </ul>
-            </nav>
+            </ul>
         </div>
         @endif
+
         <!-- Action Buttons -->
         <div class="d-flex justify-content-between mt-4">
             <form action="{{ route('sku-import.preview.cancel') }}" method="POST">
@@ -427,9 +511,14 @@
                 return new bootstrap.Tooltip(tooltipTriggerEl, {
                     html: true,
                     boundary: 'window',
-                    placement: 'top'
+                    placement: 'top',
+                    delay: {
+                        show: 100,
+                        hide: 100
+                    }
                 });
             });
+
 
             $('#confirmBtn').click(function(e) {
                 e.preventDefault();

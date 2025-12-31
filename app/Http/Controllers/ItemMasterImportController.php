@@ -68,7 +68,7 @@ class ItemMasterImportController extends Controller
             foreach ($rows as $rowIndex => $row) {
                 $rowNumber = $rowIndex + 2;
 
-                // Ensure we have at least 7 columns
+                // Ensure at least 7 columns
                 $row = array_pad($row, 7, null);
 
                 $itemData = [
@@ -81,6 +81,7 @@ class ItemMasterImportController extends Controller
                     'saleprice' => $this->cleanPrice($row[6] ?? 0),
                     'row_number' => $rowNumber
                 ];
+
 
                 // Validation rules
                 $validator = Validator::make($itemData, [
@@ -98,7 +99,14 @@ class ItemMasterImportController extends Controller
                             }
                         }
                     ],
-                    'itemname'  => 'required|max:200',
+                    'itemname' => [
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            if ($this->getByteLength($value) > 200) {  // Assuming nvarchar(200)
+                                $fail('Item Name exceeds 200 bytes.');
+                            }
+                        }
+                    ],
                     'jancd'     => [
                         'required',
                         'digits:13',
@@ -108,7 +116,21 @@ class ItemMasterImportController extends Controller
                             }
                         }
                     ],
-                    'makername' => 'required',
+                    'makername' => [
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            if ($this->getByteLength($value) > 200) {  // nvarchar(200)
+                                $fail('Maker Name exceeds 200 bytes.');
+                            }
+                        }
+                    ],
+                    'memo' => [
+                        function ($attribute, $value, $fail) {
+                            if (!empty($value) && $this->getByteLength($value) > 500) {  // nvarchar(500)
+                                $fail('Memo exceeds 500 bytes.');
+                            }
+                        }
+                    ],
                     'listprice' => [
                         'required',
                         'numeric',
@@ -257,6 +279,13 @@ class ItemMasterImportController extends Controller
 
         return $value;
     }
+
+    private function getByteLength($string)
+    {
+        return strlen(mb_convert_encoding($string, 'UTF-8'));
+    }
+
+
     public function processCsvPreview(Request $request)
     {
         $request->validate([
@@ -338,7 +367,14 @@ class ItemMasterImportController extends Controller
                             }
                         }
                     ],
-                    'itemname'  => 'required|max:200',
+                    'itemname' => [
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            if ($this->getByteLength($value) > 200) {  // Assuming nvarchar(200)
+                                $fail('Item Name exceeds 200 bytes.');
+                            }
+                        }
+                    ],
                     'jancd'     => [
                         'required',
                         'digits:13',
@@ -348,7 +384,21 @@ class ItemMasterImportController extends Controller
                             }
                         }
                     ],
-                    'makername' => 'required',
+                    'makername' => [
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            if ($this->getByteLength($value) > 200) {  // nvarchar(200)
+                                $fail('Maker Name exceeds 200 bytes.');
+                            }
+                        }
+                    ],
+                    'memo' => [
+                        function ($attribute, $value, $fail) {
+                            if (!empty($value) && $this->getByteLength($value) > 500) {  // nvarchar(500)
+                                $fail('Memo exceeds 500 bytes.');
+                            }
+                        }
+                    ],
                     'listprice' => [
                         'required',
                         'numeric',
@@ -425,7 +475,7 @@ class ItemMasterImportController extends Controller
                 ->with('error', 'Failed to process CSV file: ' . $e->getMessage());
         }
     }
- 
+
     private function hasDuplicateItemCodesInCurrentImport($previewData, $currentIndex, $currentItemCode)
     {
         if (empty($currentItemCode)) {
@@ -455,7 +505,7 @@ class ItemMasterImportController extends Controller
 
         return MItem::where('Item_Code', $itemCode)->exists();
     }
- 
+
     private function hasDuplicateItemCodes($previewData, $currentRowNumber)
     {
         $currentItemCode = $previewData[$currentRowNumber]['item_code'] ?? '';
@@ -548,8 +598,8 @@ class ItemMasterImportController extends Controller
                 $mItem->addChild('SalePrice', $row['saleprice'] ?? 0);
                 $mItem->addChild('CreatedDate', $itemExists ? null : $currentDate); // Only set CreatedDate for new items
                 $mItem->addChild('UpdatedDate', $currentDate); // Always update UpdatedDate
-                $mItem->addChild('Createdby', $itemExists ? null : $importedBy); 
-                $mItem->addChild('Updatedby', $importedBy); 
+                $mItem->addChild('Createdby', $itemExists ? null : $importedBy);
+                $mItem->addChild('Updatedby', $importedBy);
                 $mItem->addChild('IsUpdate', $itemExists ? '1' : '0'); // Flag: 1 for update, 0 for insert
 
                 $validCount++;
@@ -793,7 +843,7 @@ class ItemMasterImportController extends Controller
     // Optional: Direct import methods (without preview)
     public function importExcel(Request $request)
     {
-        return $this->processPreview($request); 
+        return $this->processPreview($request);
     }
 
     public function importCsv(Request $request)

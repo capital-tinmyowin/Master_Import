@@ -221,6 +221,16 @@
                 font-size: 12px;
                 line-height: 1.4;
             }
+
+            .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;   /* ← FIX */
+    max-width: 100%;
+    cursor: pointer;     /* optional UX improvement */
+}
+
         </style>
     </head>
 
@@ -315,16 +325,32 @@
                                 <span class="truncate" style="max-width: 110px;">{{ $item['item_code'] }}</span>
                             </td>
                             <td class="col-item-name text-left">
-                                <span class="truncate" style="max-width: 170px;">{{ $item['itemname'] }}</span>
+                                <span class="truncate"
+                                    data-bs-toggle="tooltip" style="max-width: 170px;"
+                                    data-bs-placement="top"
+                                    title="{{ $item['itemname'] }}">
+                                    {{ $item['itemname'] }}
+                                </span>
                             </td>
                             <td class="col-jancd text-center">
                                 <span class="truncate" style="max-width: 130px;">{{ $item['jancd'] ?? '' }}</span>
                             </td>
                             <td class="col-maker-name text-left">
-                                <span class="truncate" style="max-width: 140px;">{{ $item['makername'] ?? '' }}</span>
+                                <span class="truncate"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top" style="max-width: 170px;"
+                                    title="{{ $item['makername'] ?? '' }}">
+                                    {{ $item['makername'] ?? '' }}
+                                </span>
                             </td>
+
                             <td class="col-memo text-left">
-                                <span class="truncate" style="max-width: 140px;">{{ $item['memo'] ?? '' }}</span>
+                                <span class="truncate"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top" style="max-width: 140px;"
+                                    title="{{ $item['memo'] ?? '' }}">
+                                    {{ $item['memo'] ?? '' }}
+                                </span>
                             </td>
                             <td class="col-list-price text-right" @if($listPriceIssue) @endif>
                                 {{ $item['listprice'] == 0 ? '0 (Invalid)' : number_format($item['listprice'], 2) }}
@@ -351,78 +377,73 @@
                 </table>
             </div>
 
-            <!-- Simple pagination (if you still want pagination without breaking logic) -->
-            @if($previewData->hasPages()) <div class="mt-3">
-                <nav aria-label="Preview pagination">
-                    <ul class="pagination justify-content-end mb-0">
-                        {{-- Previous Page Link --}}
-                        @if($previewData->onFirstPage())
-                        <li class="page-item disabled">
-                            <span class="page-link">&laquo;</span>
-                        </li>
+            @if($previewData->hasPages())
+            <div class="mt-3 d-flex justify-content-between align-items-center">
+                {{-- Pagination info --}}
+                <div>
+                    Showing
+                    {{ $previewData->firstItem() }}
+                    @if ($previewData->lastItem() !== $previewData->firstItem())
+                    to {{ $previewData->lastItem() }}
+                    @endif
+                    of {{ $previewData->total() }}
+                </div>
+
+                {{-- Pagination links --}}
+                <ul class="pagination mb-0">
+                    {{-- Previous Page Link --}}
+                    @if($previewData->onFirstPage())
+                    <li class="page-item disabled">
+                        <span class="page-link">&laquo;</span>
+                    </li>
+                    @else
+                    <li class="page-item">
+                        <a class="page-link" href="{{ $previewData->previousPageUrl() }}" rel="prev">&laquo;</a>
+                    </li>
+                    @endif
+
+                    {{-- Pagination Elements --}}
+                    @php
+                    $currentPage = $previewData->currentPage();
+                    $lastPage = $previewData->lastPage();
+                    $startPage = max(1, $currentPage - 2);
+                    $endPage = min($lastPage, $currentPage + 2);
+                    @endphp
+
+                    @if($startPage > 1)
+                    <li class="page-item"><a class="page-link" href="{{ $previewData->url(1) }}">1</a></li>
+                    @if($startPage > 2)
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    @endif
+                    @endif
+
+                    @for($page = $startPage; $page <= $endPage; $page++)
+                        @if($page==$currentPage)
+                        <li class="page-item active"><span class="page-link">{{ $page }}</span></li>
                         @else
-                        <li class="page-item">
-                            <a class="page-link" href="{{ $previewData->previousPageUrl() }}" rel="prev">&laquo;</a>
-                        </li>
+                        <li class="page-item"><a class="page-link" href="{{ $previewData->url($page) }}">{{ $page }}</a></li>
                         @endif
+                        @endfor
 
-                        {{-- Pagination Elements --}}
-                        @php
-                        // Show limited page numbers
-                        $currentPage = $previewData->currentPage();
-                        $lastPage = $previewData->lastPage();
-                        $startPage = max(1, $currentPage - 2);
-                        $endPage = min($lastPage, $currentPage + 2);
-                        @endphp
+                        @if($endPage < $lastPage)
+                            @if($endPage < $lastPage - 1)
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            @endif
+                            <li class="page-item"><a class="page-link" href="{{ $previewData->url($lastPage) }}">{{ $lastPage }}</a></li>
+                            @endif
 
-                        @if($startPage > 1)
-                        <li class="page-item">
-                            <a class="page-link" href="{{ $previewData->url(1) }}">1</a>
-                        </li>
-                        @if($startPage > 2)
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                        @endif
-                        @endif
-
-                        @for($page = $startPage; $page <= $endPage; $page++)
-                            @if($page==$currentPage)
-                            <li class="page-item active">
-                            <span class="page-link">{{ $page }}</span>
+                            {{-- Next Page Link --}}
+                            @if($previewData->hasMorePages())
+                            <li class="page-item">
+                                <a class="page-link" href="{{ $previewData->nextPageUrl() }}" rel="next">&raquo;</a>
                             </li>
                             @else
-                            <li class="page-item">
-                                <a class="page-link" href="{{ $previewData->url($page) }}">{{ $page }}</a>
-                            </li>
+                            <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
                             @endif
-                            @endfor
-
-                            @if($endPage < $lastPage)
-                                @if($endPage < $lastPage - 1)
-                                <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                                </li>
-                                @endif
-                                <li class="page-item">
-                                    <a class="page-link" href="{{ $previewData->url($lastPage) }}">{{ $lastPage }}</a>
-                                </li>
-                                @endif
-
-                                {{-- Next Page Link --}}
-                                @if($previewData->hasMorePages())
-                                <li class="page-item">
-                                    <a class="page-link" href="{{ $previewData->nextPageUrl() }}" rel="next">&raquo;</a>
-                                </li>
-                                @else
-                                <li class="page-item disabled">
-                                    <span class="page-link">&raquo;</span>
-                                </li>
-                                @endif
-                    </ul>
-                </nav>
+                </ul>
             </div>
             @endif
+
             <!-- Action Buttons -->
             <div class="d-flex justify-content-between mt-4">
                 <form action="{{ route('item-import.preview.cancel') }}" method="POST">
@@ -459,23 +480,6 @@
                             hide: 100
                         }
                     });
-                });
-
-                // Add tooltip for truncated text
-                $('.truncate').each(function() {
-                    if (this.offsetWidth < this.scrollWidth) {
-                        $(this).attr('data-bs-toggle', 'tooltip')
-                            .attr('data-bs-title', $(this).text())
-                            .attr('data-bs-placement', 'top');
-                    }
-                });
-
-                // Reinitialize tooltips for truncated elements
-                tooltipTriggerList = [].slice.call(document.querySelectorAll('.truncate[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.forEach(function(tooltipTriggerEl) {
-                    if (!tooltipTriggerEl._tooltip) {
-                        new bootstrap.Tooltip(tooltipTriggerEl);
-                    }
                 });
 
                 $('#confirmBtn').click(function(e) {

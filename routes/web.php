@@ -62,6 +62,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/edit', [MItemController::class, 'edit'])->name('mitems.edit');
         Route::put('/{id}', [MItemController::class, 'update'])->name('mitems.update');
 
+        Route::post('/mitems/delete-multiple', [MItemController::class, 'deleteMultiple'])->name('mitems.delete-multiple');
+    Route::delete('/mitems/{id}', [MItemController::class, 'destroy'])->name('mitems.destroy');
         Route::get('/by-code/{item_code}', [ImportLogController::class, 'showByCode'])
             ->name('mitems.by.code.redirect');
         // Check item code

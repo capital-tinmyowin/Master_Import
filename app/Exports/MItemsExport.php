@@ -8,40 +8,56 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use Illuminate\Support\Facades\DB;
 
-class MItemsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnFormatting
+class MItemsExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    WithStyles,
+    WithColumnFormatting
 {
     protected $itemCode;
     protected $itemName;
     protected $sortBy;
     protected $sortOrder;
     protected $format;
+    protected $useLikeSearch;
 
-    public function __construct($itemCode = null, $itemName = null, $sortBy = null, $sortOrder = 'asc', $format = 'excel')
-    {
+    public function __construct(
+        $itemCode = null,
+        $itemName = null,
+        $sortBy = null,
+        $sortOrder = 'asc',
+        $format = 'excel',
+        $useLikeSearch = 0
+    ) {
         $this->itemCode = $itemCode;
         $this->itemName = $itemName;
         $this->sortBy = $sortBy;
         $this->sortOrder = $sortOrder;
         $this->format = $format;
+        $this->useLikeSearch = $useLikeSearch;
     }
 
     public function collection()
     {
-        $itemsArray = DB::select('EXEC sp_GetMItems @Item_Code = ?, @ItemName = ?', [
-            $this->itemCode,
-            $this->itemName
-        ]);
+        $itemsArray = DB::select(
+            'EXEC sp_GetMItems @Item_Code = ?, @ItemName = ?, @UseLikeSearch = ?',
+            [
+                $this->itemCode,
+                $this->itemName,
+                $this->useLikeSearch
+            ]
+        );
 
         $itemsCollection = collect($itemsArray);
 
         if ($this->sortBy && in_array($this->sortBy, ['ListPrice', 'SalePrice'])) {
-            $itemsCollection = $this->sortOrder === 'desc' 
+            $itemsCollection = $this->sortOrder === 'desc'
                 ? $itemsCollection->sortByDesc($this->sortBy)
                 : $itemsCollection->sortBy($this->sortBy);
-                
+
             $itemsCollection = $itemsCollection->values();
         }
 
@@ -52,7 +68,7 @@ class MItemsExport implements FromCollection, WithHeadings, WithMapping, WithSty
     {
         return [
             '商品番号',
-            '商品名', 
+            '商品名',
             'JANCD',
             'メーカー名',
             '注記',
@@ -63,7 +79,6 @@ class MItemsExport implements FromCollection, WithHeadings, WithMapping, WithSty
 
     public function map($item): array
     {
-        // For CSV, format numbers with commas
         if ($this->format === 'csv') {
             return [
                 $item->Item_Code,
@@ -71,12 +86,11 @@ class MItemsExport implements FromCollection, WithHeadings, WithMapping, WithSty
                 $item->JanCD,
                 $item->MakerName,
                 $item->Memo,
-                number_format($item->ListPrice), // Add commas for CSV
-                number_format($item->SalePrice), // Add commas for CSV
+                number_format($item->ListPrice),
+                number_format($item->SalePrice),
             ];
         }
 
-        // For Excel, keep as numbers for proper formatting
         return [
             $item->Item_Code,
             $item->ItemName,
@@ -90,46 +104,37 @@ class MItemsExport implements FromCollection, WithHeadings, WithMapping, WithSty
 
     public function columnFormats(): array
     {
-        // Only apply Excel formatting for Excel exports
-        if ($this->format === 'excel') {
-            return [
-                'F' => '#,##0', // 定価 - comma format, no decimals
-                'G' => '#,##0', // 原価 - comma format, no decimals
-            ];
-        }
-
-        return [];
+        return $this->format === 'excel'
+            ? [
+                'F' => '#,##0',
+                'G' => '#,##0',
+            ]
+            : [];
     }
 
     public function styles(Worksheet $sheet)
     {
-        // Only apply styles for Excel exports
-        if ($this->format === 'excel') {
-            return [
-                // Header row bold
-                1 => ['font' => ['bold' => true]],
-                
-                // Auto-size columns
-                'A:G' => [
-                    'alignment' => [
-                        'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP,
-                    ],
-                ],
-                
-                // Right align money columns
-                'F' => [
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT,
-                    ],
-                ],
-                'G' => [
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT,
-                    ],
-                ],
-            ];
+        if ($this->format !== 'excel') {
+            return [];
         }
 
-        return [];
+        return [
+            1 => ['font' => ['bold' => true]],
+            'A:G' => [
+                'alignment' => [
+                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP,
+                ],
+            ],
+            'F' => [
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT,
+                ],
+            ],
+            'G' => [
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT,
+                ],
+            ],
+        ];
     }
 }

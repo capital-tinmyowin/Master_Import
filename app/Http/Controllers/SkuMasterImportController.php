@@ -33,6 +33,9 @@ class SkuMasterImportController extends Controller
         $validationErrors = session('sku_import_errors', []);
         $fileType = session('sku_import_file_type', 'excel');
 
+        $totalRecords = session('sku_import_total_records', count($previewData));
+        $errorCount   = session('sku_import_error_count', 0);
+
         if (empty($previewData)) {
             return redirect()->route('sku-import.index')
                 ->with('error', 'No preview data found. Please upload a file first.');
@@ -54,14 +57,74 @@ class SkuMasterImportController extends Controller
         );
 
         return view('import.sku_preview', [
-            'previewData' => $previewPaginator,
-            'fileName' => $fileName,
-            'errors' => $validationErrors,
-            'fileType' => $fileType,
-            'totalRecords' => count($previewData),
-            'errorCount' => count($validationErrors)
+            'previewData'  => $previewPaginator,
+            'fileName'     => $fileName,
+            'fileType'     => $fileType,
+            'totalRecords' => $totalRecords,
+            'errorCount'   => $errorCount
         ]);
     }
+
+
+
+    private function validateSkuRows(array $rows, string $fileName, string $fileType)
+    {
+        // Build XML
+        $xml = new \SimpleXMLElement('<Skus/>');
+
+        foreach ($rows as $index => $row) {
+            $rowNumber = $index + 2;
+            $row = array_pad($row, 8, null);
+
+            $sku = $xml->addChild('Sku');
+            $sku->addChild('RowNumber', $rowNumber);
+            $sku->addChild('ItemAdminCode', trim($row[0] ?? ''));
+            $sku->addChild('ItemCode', trim($row[1] ?? ''));
+            $sku->addChild('SizeName', trim($row[2] ?? ''));
+            $sku->addChild('ColorName', trim($row[3] ?? ''));
+            $sku->addChild('SizeCode', trim($row[4] ?? ''));
+            $sku->addChild('ColorCode', trim($row[5] ?? ''));
+            $sku->addChild('JanCode', $this->cleanJanCD($row[6] ?? ''));
+            $sku->addChild('Quantity', $this->cleanNumber($row[7] ?? 0));
+        }
+
+        // Call validation SP
+        $pdo = DB::connection()->getPdo();
+        $stmt = $pdo->prepare('EXEC sp_Validate_M_SKU_XML ?');
+        $stmt->execute([$xml->asXML()]);
+
+        $rowsResult = $stmt->fetchAll(\PDO::FETCH_OBJ);
+
+        $stmt->nextRowset();
+        $summary = $stmt->fetch(\PDO::FETCH_OBJ);
+
+        // Prepare preview data
+        $previewData = [];
+        foreach ($rowsResult as $row) {
+            $previewData[] = [
+                'row_number'      => $row->RowNumber,
+                'item_admin_code' => $row->Item_Admin_Code,
+                'item_code'       => $row->Item_Code,
+                'size_code'       => $row->Size_Code,
+                'size_name'       => $row->Size_Name,
+                'color_code'      => $row->Color_Code,
+                'color_name'      => $row->Color_Name,
+                'jancd'           => $row->JanCode,
+                'quantity'        => $row->Quantity,
+                'Status_Message'  => $row->Status_Message,
+                'Is_Valid'        => $row->Is_Valid
+            ];
+        }
+
+        // Store session (same as Excel)
+        Session::put('sku_import_preview_data', $previewData);
+        Session::put('sku_import_file_name', $fileName);
+        Session::put('sku_import_file_type', $fileType);
+        Session::put('sku_import_total_records', $summary->Total_Records ?? 0);
+        Session::put('sku_import_error_count', $summary->Error_Records ?? 0);
+    }
+
+
     // Process Excel preview (handle both xls and xlsx)
     public function processPreview(Request $request)
     {
@@ -73,24 +136,11 @@ class SkuMasterImportController extends Controller
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
 
-            // Read Excel file
-            $path = $file->getRealPath();
-            $spreadsheet = IOFactory::load($path);
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray();
+            $spreadsheet = IOFactory::load($file->getRealPath());
+            $rows = $spreadsheet->getActiveSheet()->toArray();
 
-            // Remove empty rows
-            $rows = array_filter($rows, function ($row) {
-                return !empty(array_filter($row, function ($cell) {
-                    return $cell !== null && trim($cell) !== '';
-                }));
-            });
-
-            // Remove header row
-            $header = array_shift($rows);
-
-            // Check if header matches expected format
-            $expectedHeaders = [
+            $expectedHeader = [
+                'Item Admin Code',
                 '商品番号',
                 'サイズ名 (項目選択肢別在庫用横軸選択肢)',
                 'カラー名 (項目選択肢別在庫用縦軸選択肢)',
@@ -99,231 +149,49 @@ class SkuMasterImportController extends Controller
                 'JANコード',
                 '在庫数'
             ];
-            $headerCheck = $this->checkHeaders($header, $expectedHeaders);
 
-            if (!$headerCheck['valid']) {
+            $header = array_map('trim', $rows[0] ?? []);
+
+            if ($header !== $expectedHeader) {
                 return redirect()->route('sku-import.index')
-                    ->with('error', $headerCheck['message']);
+                    ->with('error', 'Invalid Excel header format. Please check the column names.');
             }
 
-            $previewData = [];
-            $validationErrors = [];
-            $skuCombinations = []; // Track combinations for duplicate check
-            $itemCodes = []; // ADDED: Collect item codes for database validation
+            $rows = array_filter(
+                $rows,
+                fn($row) =>
+                !empty(array_filter($row, fn($cell) => trim((string)$cell) !== ''))
+            );
 
-            // First pass: Collect all data and track combinations
-            foreach ($rows as $rowIndex => $row) {
-                $rowNumber = $rowIndex + 2;
+            array_shift($rows); // remove header
 
-                // Ensure have at least 7 columns
-                $row = array_pad($row, 7, null);
-
-                // Convert scientific notation to string for JanCD
-                $janCD = $row[5] ?? '';
-
-                $itemData = [
-                    'item_code' => trim($row[0] ?? ''),        // 商品番号 (column 0)
-                    'size_code' => trim($row[1] ?? ''),        // サイズ名 (項目選択肢別在庫用横軸選択肢) (column 1)
-                    'color_code' => trim($row[2] ?? ''),       // カラー名 (項目選択肢別在庫用縦軸選択肢) (column 2)
-                    'size_name' => trim($row[3] ?? ''),        // サイズコード (column 3)
-                    'color_name' => trim($row[4] ?? ''),       // カラーコード (column 4)
-                    'jancd' => $this->cleanJanCD($janCD),     // JANコード (column 5)
-                    'quantity' => $this->cleanNumber($row[6] ?? 0),
-                    'row_number' => $rowNumber,
-                    'original_jancd' => $janCD // Keep original for error messages
-                ];
-
-                $previewData[] = $itemData;
-
-                // ADDED: Collect item code for database validation
-                $itemCode = trim($itemData['item_code']);
-                if ($itemCode !== '') {
-                    $itemCodes[$itemCode] = true;
-                }
-
-                // Track SKU combination
-                $sizeCode = trim($itemData['size_code']);
-                $colorCode = trim($itemData['color_code']);
-
-                if ($itemCode !== '' && $sizeCode !== '' && $colorCode !== '') {
-                    $key = strtoupper($itemCode . '-' . $sizeCode . '-' . $colorCode);
-
-                    if (!isset($skuCombinations[$key])) {
-                        $skuCombinations[$key] = [];
-                    }
-                    $skuCombinations[$key][] = $rowNumber;
-                }
-            }
-
-            // ADDED: Check which item codes exist in database
-            $existingItemCodes = [];
-            if (!empty($itemCodes)) {
-                $itemCodeArray = array_keys($itemCodes);
-                // Check in MItem table
-                $existingItems = MItem::whereIn('Item_Code', $itemCodeArray)
-                    ->select('Item_Code')
-                    ->get()
-                    ->pluck('Item_Code')
-                    ->toArray();
-
-                // Convert to uppercase for case-insensitive comparison
-                $existingItemCodes = array_map('strtoupper', $existingItems);
-            }
-
-            // Second pass: Validate and check for duplicates
-            foreach ($previewData as $index => $itemData) {
-                $rowNumber = $itemData['row_number'];
-                $itemCode = trim($itemData['item_code']); // ADDED: Get item code
-
-                $errors = [];
-
-                // ADDED: Check if item exists in database
-                if ($itemCode !== '') {
-                    $itemCodeUpper = strtoupper($itemCode);
-                    if (!in_array($itemCodeUpper, $existingItemCodes)) {
-                        $errors[] = "Item Code '{$itemCode}' does not exist in the Item Master database.";
-                    }
-                }
-
-                // Validation rules
-                $validator = Validator::make($itemData, [
-                    'item_code'  => [
-                        'required',
-                        'max:50',
-                        function ($attribute, $value, $fail) {
-                            $trimmedValue = trim($value);
-
-                            if ($trimmedValue === '') {
-                                $fail('Item Code is required.');
-                                return;
-                            }
-
-                            // Check for any whitespace
-                            if (preg_match('/\s/', $value)) {
-                                $fail('Item Code must not contain spaces or whitespace.');
-                                return;
-                            }
-
-                            // Check for Japanese characters
-                            if (preg_match('/[\x{3040}-\x{309F}\x{30A0}-\x{30FF}\x{4E00}-\x{9FAF}]/u', $trimmedValue)) {
-                                $fail('Item Code must not contain Japanese characters.');
-                                return;
-                            }
-
-                            // Allow only uppercase letters and numbers
-                            if (!preg_match('/^[A-Z0-9]+$/', $trimmedValue)) {
-                                $fail('Item Code must contain only uppercase letters (A-Z) and numbers (0-9). No lowercase letters or special characters allowed.');
-                            }
-                        }
-                    ],
-                    'size_code'  => [
-                        'required',
-                        'max:50',
-                        'regex:/^\d+$/'  // Numbers only
-                    ],
-                    'color_code' => [
-                        'required',
-                        'max:50',
-                        // Allow empty string for color_code 
-                        function ($attribute, $value, $fail) {
-                            if ($value !== '' && !preg_match('/^\d+$/', $value)) {
-                                $fail('Color Code must contain only numbers.');
-                            }
-                        }
-                    ],
-                    'size_name'  => 'required|max:100',
-                    'color_name' => 'required|max:100',
-                    'jancd' => [
-                        'required',
-                        function ($attribute, $value, $fail) use ($itemData) {
-                            // Check if original JanCD was empty
-                            if (trim($itemData['original_jancd']) === '') {
-                                $fail('JanCD is required.');
-                                return;
-                            }
-
-                            // Clean the JanCD value first
-                            $cleaned = $this->cleanJanCDForValidation($itemData['original_jancd']);
-
-                            // Check if it's exactly 13 digits
-                            if (strlen($cleaned) !== 13) {
-                                $fail('JanCD must be exactly 13 digits and number only. ');
-                                return;
-                            }
-
-                            // Check if contains only digits
-                            if (!ctype_digit($cleaned)) {
-                                $fail('JanCD must contain only numbers.');
-                                return;
-                            }
-                        }
-                    ],
-                    'quantity'   => [
-                        'required',
-                        'integer',
-                        'min:0',
-                        'regex:/^\d+$/'  // Numbers only
-                    ],
-                ], [
-                    'item_code.required' => 'Item Code is required.',
-                    'size_code.required' => 'Size Code is required.',
-                    'size_code.regex' => 'Size Code must contain only numbers.',
-                    'color_code.required' => 'Color Code is required.',
-                    'size_name.required' => 'Size Name is required.',
-                    'color_name.required' => 'Color Name is required.',
-                    'jancd.required' => 'JanCD is required.',
-                    'quantity.required' => 'Quantity is required.',
-                    'quantity.integer' => 'Quantity must be a whole number.',
-                    'quantity.min' => 'Quantity cannot be negative.',
-                    'quantity.regex' => 'Quantity must contain only numbers.',
-                ]);
-
-                if ($validator->fails()) {
-                    $errors = array_merge($errors, $validator->errors()->all());
-                }
-
-                // Check for duplicate SKU combination
-                $sizeCode = trim($itemData['size_code']);
-                $colorCode = trim($itemData['color_code']);
-
-                if ($itemCode !== '' && $sizeCode !== '' && $colorCode !== '') {
-                    $key = strtoupper($itemCode . '-' . $sizeCode . '-' . $colorCode);
-
-                    if (isset($skuCombinations[$key]) && count($skuCombinations[$key]) > 1) {
-                        // This is a duplicate combination
-                        $duplicateRowsList = $skuCombinations[$key];
-                        // Remove current row from the list to show other duplicates
-                        $otherDuplicates = array_diff($duplicateRowsList, [$rowNumber]);
-
-                        if (!empty($otherDuplicates)) {
-                            $duplicateRowsText = implode(', ', $otherDuplicates);
-                            $errors[] = "Duplicate SKU combination: Item Code '{$itemCode}' with Size Code '{$sizeCode}' and Color Code '{$colorCode}'. " .
-                                "Duplicate rows: {$duplicateRowsText}.";
-                        }
-                    }
-                }
-
-                if (!empty($errors)) {
-                    $validationErrors[] = [
-                        'row' => $rowNumber,
-                        'errors' => $errors,
-                        'data' => $itemData
-                    ];
-                }
-            }
-
-            // Store in session
-            Session::put('sku_import_preview_data', $previewData);
-            Session::put('sku_import_file_name', $fileName);
-            Session::put('sku_import_errors', $validationErrors);
-            Session::put('sku_import_file_type', 'excel');
+            $this->validateSkuRows($rows, $fileName, 'excel');
 
             return redirect()->route('sku-import.preview.show');
         } catch (\Exception $e) {
             return redirect()->route('sku-import.index')
-                ->with('error', 'Failed to process Excel file: ' . $e->getMessage());
+                ->with('error', $e->getMessage());
         }
     }
+
+    private function normalizeCode($value)
+    {
+        if ($value === null) return '';
+
+        // keep digits only
+        $digits = preg_replace('/\D/', '', (string)$value);
+
+        if ($digits === '') return '';
+
+        // limit to 4 digits (remove excess)
+        if (strlen($digits) > 4) {
+            $digits = substr($digits, 0, 4);
+        }
+
+        // pad with leading zeros → always 4 digits
+        return str_pad($digits, 4, '0', STR_PAD_LEFT);
+    }
+
     private function cleanJanCDForValidation($value)
     {
         if ($value === null || trim($value) === '') return '';
@@ -349,248 +217,26 @@ class SkuMasterImportController extends Controller
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
 
-            // Read CSV file
-            $path = $file->getRealPath();
-            $rows = $this->readCsvFile($path);
+            $rows = $this->readCsvFile($file->getRealPath());
 
-            // Remove empty rows
-            $rows = array_filter($rows, function ($row) {
-                return !empty(array_filter($row, function ($cell) {
-                    return $cell !== null && trim($cell) !== '';
-                }));
-            });
+            $rows = array_filter(
+                $rows,
+                fn($row) =>
+                !empty(array_filter($row, fn($cell) => trim((string)$cell) !== ''))
+            );
 
-            // Remove header row
-            $header = array_shift($rows);
+            array_shift($rows); // remove header
 
-            // Check if header matches expected format
-            $expectedHeaders = [
-                '商品番号',
-                'サイズ名 (項目選択肢別在庫用横軸選択肢)',
-                'カラー名 (項目選択肢別在庫用縦軸選択肢)',
-                'サイズコード',
-                'カラーコード',
-                'JANコード',
-                '在庫数'
-            ];
-            $headerCheck = $this->checkHeaders($header, $expectedHeaders);
-
-            if (!$headerCheck['valid']) {
-                return redirect()->route('sku-import.index')
-                    ->with('error', $headerCheck['message']);
-            }
-
-            $previewData = [];
-            $validationErrors = [];
-            $skuCombinations = []; // Track combinations for duplicate check
-            $itemCodes = []; // ADDED: Collect item codes for database validation
-
-            // First pass: Collect all data and track combinations
-            foreach ($rows as $rowIndex => $row) {
-                $rowNumber = $rowIndex + 2;
-
-                $row = array_pad($row, 7, null);
-
-                $janCD = $row[5] ?? '';
-
-                $itemData = [
-                    'item_code' => trim($row[0] ?? ''),        // 商品番号 (column 0)
-                    'size_code' => trim($row[1] ?? ''),        // サイズ名 (項目選択肢別在庫用横軸選択肢) (column 1)
-                    'color_code' => trim($row[2] ?? ''),       // カラー名 (項目選択肢別在庫用縦軸選択肢) (column 2)
-                    'size_name' => trim($row[3] ?? ''),        // サイズコード (column 3)
-                    'color_name' => trim($row[4] ?? ''),       // カラーコード (column 4)
-                    'jancd' => $this->cleanJanCD($janCD),     // JANコード (column 5)
-                    'quantity' => $this->cleanNumber($row[6] ?? 0),
-                    'row_number' => $rowNumber,
-                    'original_jancd' => $janCD
-                ];
-
-                $previewData[] = $itemData;
-
-                // ADDED: Collect item code for database validation
-                $itemCode = trim($itemData['item_code']);
-                if ($itemCode !== '') {
-                    $itemCodes[$itemCode] = true;
-                }
-
-                // Track SKU combination
-                $sizeCode = trim($itemData['size_code']);
-                $colorCode = trim($itemData['color_code']);
-
-                if ($itemCode !== '' && $sizeCode !== '' && $colorCode !== '') {
-                    $key = strtoupper($itemCode . '-' . $sizeCode . '-' . $colorCode);
-
-                    if (!isset($skuCombinations[$key])) {
-                        $skuCombinations[$key] = [];
-                    }
-                    $skuCombinations[$key][] = $rowNumber;
-                }
-            }
-
-            // ADDED: Check which item codes exist in database
-            $existingItemCodes = [];
-            if (!empty($itemCodes)) {
-                $itemCodeArray = array_keys($itemCodes);
-                // Check in MItem table
-                $existingItems = MItem::whereIn('Item_Code', $itemCodeArray)
-                    ->select('Item_Code')
-                    ->get()
-                    ->pluck('Item_Code')
-                    ->toArray();
-
-                // Convert to uppercase for case-insensitive comparison
-                $existingItemCodes = array_map('strtoupper', $existingItems);
-            }
-
-            // Second pass: Validate and check for duplicates
-            foreach ($previewData as $index => $itemData) {
-                $rowNumber = $itemData['row_number'];
-                $itemCode = trim($itemData['item_code']); // ADDED: Get item code
-
-                $errors = [];
-
-                // ADDED: Check if item exists in database
-                if ($itemCode !== '') {
-                    $itemCodeUpper = strtoupper($itemCode);
-                    if (!in_array($itemCodeUpper, $existingItemCodes)) {
-                        $errors[] = "Item Code '{$itemCode}' does not exist in the Item Master database.";
-                    }
-                }
-
-                // Validation rules
-                $validator = Validator::make($itemData, [
-                    'item_code'  => [
-                        'required',
-                        'max:50',
-                        function ($attribute, $value, $fail) {
-                            $trimmedValue = trim($value);
-
-                            if ($trimmedValue === '') {
-                                $fail('Item Code is required.');
-                                return;
-                            }
-
-                            // Check for any whitespace
-                            if (preg_match('/\s/', $value)) {
-                                $fail('Item Code must not contain spaces or whitespace.');
-                                return;
-                            }
-
-                            // Check for Japanese characters
-                            if (preg_match('/[\x{3040}-\x{309F}\x{30A0}-\x{30FF}\x{4E00}-\x{9FAF}]/u', $trimmedValue)) {
-                                $fail('Item Code must not contain Japanese characters.');
-                                return;
-                            }
-
-                            // Allow only uppercase letters and numbers
-                            if (!preg_match('/^[A-Z0-9]+$/', $trimmedValue)) {
-                                $fail('Item Code must contain only uppercase letters (A-Z) and numbers (0-9). No lowercase letters or special characters allowed.');
-                            }
-                        }
-                    ],
-                    'size_code'  => [
-                        'required',
-                        'max:50',
-                        'regex:/^\d+$/'  // Numbers only
-                    ],
-                    'color_code' => [
-                        'required',
-                        'max:50',
-                        function ($attribute, $value, $fail) {
-                            if ($value !== '' && !preg_match('/^\d+$/', $value)) {
-                                $fail('Color Code must contain only numbers.');
-                            }
-                        }
-                    ],
-                    'size_name'  => 'required|max:100',
-                    'color_name' => 'required|max:100',
-                    'jancd'      => [
-                        'required',
-                        function ($attribute, $value, $fail) use ($itemData) {
-                            // Check if original JanCD was empty
-                            if (trim($itemData['original_jancd']) === '') {
-                                $fail('JanCD is required.');
-                                return;
-                            }
-
-                            // Check length after cleaning
-                            if (strlen($value) !== 13) {
-                                $fail('JanCD must be exactly 13 digits and number only.');
-                                return;
-                            }
-
-                            // Check if contains only digits
-                            if (!ctype_digit($value)) {
-                                $fail('JanCD must contain only numbers.');
-                            }
-                        }
-                    ],
-                    'quantity'   => [
-                        'required',
-                        'integer',
-                        'min:0',
-                        'regex:/^\d+$/'  // Numbers only
-                    ],
-                ], [
-                    'item_code.required' => 'Item Code is required.',
-                    'size_code.required' => 'Size Code is required.',
-                    'size_code.regex' => 'Size Code must contain only numbers.',
-                    'color_code.required' => 'Color Code is required.',
-                    'size_name.required' => 'Size Name is required.',
-                    'color_name.required' => 'Color Name is required.',
-                    'jancd.required' => 'JanCD is required.',
-                    'quantity.required' => 'Quantity is required.',
-                    'quantity.integer' => 'Quantity must be a whole number.',
-                    'quantity.min' => 'Quantity cannot be negative.',
-                    'quantity.regex' => 'Quantity must contain only numbers.',
-                ]);
-
-                if ($validator->fails()) {
-                    $errors = array_merge($errors, $validator->errors()->all());
-                }
-
-                // Check for duplicate SKU combination
-                $sizeCode = trim($itemData['size_code']);
-                $colorCode = trim($itemData['color_code']);
-
-                if ($itemCode !== '' && $sizeCode !== '' && $colorCode !== '') {
-                    $key = strtoupper($itemCode . '-' . $sizeCode . '-' . $colorCode);
-
-                    if (isset($skuCombinations[$key]) && count($skuCombinations[$key]) > 1) {
-                        // This is a duplicate combination
-                        $duplicateRowsList = $skuCombinations[$key];
-                        // Remove current row from the list to show other duplicates
-                        $otherDuplicates = array_diff($duplicateRowsList, [$rowNumber]);
-
-                        if (!empty($otherDuplicates)) {
-                            $duplicateRowsText = implode(', ', $otherDuplicates);
-                            $errors[] = "Duplicate SKU combination: Item Code '{$itemCode}' with Size Code '{$sizeCode}' and Color Code '{$colorCode}'. " .
-                                "Duplicate rows: {$duplicateRowsText}.";
-                        }
-                    }
-                }
-
-                if (!empty($errors)) {
-                    $validationErrors[] = [
-                        'row' => $rowNumber,
-                        'errors' => $errors,
-                        'data' => $itemData
-                    ];
-                }
-            }
-
-            // Store in session
-            Session::put('sku_import_preview_data', $previewData);
-            Session::put('sku_import_file_name', $fileName);
-            Session::put('sku_import_errors', $validationErrors);
-            Session::put('sku_import_file_type', 'csv');
+            // SAME logic as Excel
+            $this->validateSkuRows($rows, $fileName, 'csv');
 
             return redirect()->route('sku-import.preview.show');
         } catch (\Exception $e) {
             return redirect()->route('sku-import.index')
-                ->with('error', 'Failed to process CSV file: ' . $e->getMessage());
+                ->with('error', $e->getMessage());
         }
     }
+
     // Confirm Import (common for both Excel and CSV)
     public function confirmImport()
     {
@@ -598,7 +244,7 @@ class SkuMasterImportController extends Controller
         DB::beginTransaction();
         try {
             $previewData = session('sku_import_preview_data', []);
-            $errorRows = session('sku_import_errors', []);
+            $errorCount = session('sku_import_error_count', 0);
             $fileName = session('sku_import_file_name', 'Unknown');
             $importedBy = Auth::check() ? Auth::user()->name : 'system';
 
@@ -608,7 +254,7 @@ class SkuMasterImportController extends Controller
             $importLog = ItemImportLog::create([
                 'Import_Type' => 2, // SKU Import Type
                 'Record_Count' => count($previewData),
-                'Error_Count' => count($errorRows),
+                'Error_Count' => $errorCount,
                 'Imported_By' => $importedBy,
                 'Imported_Date' => now()
             ]);
@@ -617,116 +263,86 @@ class SkuMasterImportController extends Controller
             // 2) Prepare valid XML for Item_Import_DataLog
             $dataLogXml = new \SimpleXMLElement('<Items/>');
             // 3) Prepare valid XML for M_SKU
-            $mSkuXml = new \SimpleXMLElement('<Items/>');
+            // $mSkuXml = new \SimpleXMLElement('<Items/>');
 
             $validCount = 0;
             $itemCodesToDelete = []; // Track item codes for deletion
 
+            $mSkuXml = new \SimpleXMLElement('<Skus/>'); // match SP
+            $errorXml = new \SimpleXMLElement('<Items/>');
+            $validCount = 0;
+
             foreach ($previewData as $row) {
-                // Skip rows with errors
-                $hasError = false;
-                foreach ($errorRows as $err) {
-                    if (($err['row'] ?? null) == ($row['row_number'] ?? null)) {
-                        $hasError = true;
-                        break;
-                    }
+                if (!isset($row['Is_Valid']) || $row['Is_Valid'] != 1) {
+                    // Error row → add to error XML
+                    $item = $errorXml->addChild('Item');
+                    $item->addChild('ImportLog_ID', $importLogId);
+                    $item->addChild('Item_Code', $row['item_code'] ?? '');
+                    $item->addChild('Item_Name', $row['item_name'] ?? '');
+                    $item->addChild('JanCD', $row['jancd'] ?? '');
+                    $item->addChild('MakerName', $row['maker_name'] ?? '');
+                    $item->addChild('Memo', $row['memo'] ?? '');
+                    $item->addChild('ListPrice', $row['list_price'] ?? 0);
+                    $item->addChild('SalePrice', $row['sale_price'] ?? 0);
+                    $item->addChild('Size_Name', $row['size_name'] ?? '');
+                    $item->addChild('Color_Name', $row['color_name'] ?? '');
+                    $item->addChild('Size_Code', $row['size_code'] ?? '');
+                    $item->addChild('Color_Code', $row['color_code'] ?? '');
+                    $item->addChild('JanCode', $row['jancd'] ?? '');
+                    $item->addChild('Quantity', $row['quantity'] ?? 0);
+                    $item->addChild('Error_Msg', $row['Status_Message'] ?? '');
+
+                    $errorRows[] = $row; // add to array
+                    continue;
                 }
-                if ($hasError) continue;
 
-                // Collect unique item codes for deletion
-                $itemCode = trim($row['item_code'] ?? '');
-                if ($itemCode !== '') {
-                    $itemCodesToDelete[$itemCode] = true;
-                }
-
-                // Generate Item_AdminCode
-                $itemAdminCode = $this->generateItemAdminCode($row['item_code'], $row['size_code'], $row['color_code']);
-
-                // A) Create XML for Item_Import_DataLog
-                $dataLogItem = $dataLogXml->addChild('Item');
-                $dataLogItem->addChild('ImportLog_ID', $importLogId);
-                $dataLogItem->addChild('Item_Code', $row['item_code'] ?? '');
-                $dataLogItem->addChild('Item_Name', ''); // Empty for SKU import
-                $dataLogItem->addChild('JanCD', $row['jancd'] ?? '');
-                $dataLogItem->addChild('MakerName', ''); // Empty for SKU import
-                $dataLogItem->addChild('Memo', ''); // Empty for SKU import
-                $dataLogItem->addChild('ListPrice', 0); // Default 0
-                $dataLogItem->addChild('SalePrice', 0); // Default 0
-                $dataLogItem->addChild('Size_Name', $row['size_name'] ?? '');
-                $dataLogItem->addChild('Color_Name', $row['color_name'] ?? '');
-                $dataLogItem->addChild('Size_Code', $row['size_code'] ?? '');
-                $dataLogItem->addChild('Color_Code', $row['color_code'] ?? '');
-                $dataLogItem->addChild('JanCode', ''); // Different from JanCD
-                $dataLogItem->addChild('Quantity', $row['quantity'] ?? 0);
-
-                // B) Create XML for M_SKU
+                // Valid row → add to M_SKU XML
                 $mSkuItem = $mSkuXml->addChild('Item');
-                $mSkuItem->addChild('Item_AdminCode', $itemAdminCode);
-                $mSkuItem->addChild('Item_Code', $row['item_code'] ?? '');
-                $mSkuItem->addChild('Size_Code', $row['size_code'] ?? '');
-                $mSkuItem->addChild('Color_Code', $row['color_code'] ?? '');
-                $mSkuItem->addChild('Size_Name', $row['size_name'] ?? '');
-                $mSkuItem->addChild('Color_Name', $row['color_name'] ?? '');
-                $mSkuItem->addChild('JanCD', $row['jancd'] ?? '');
+                $mSkuItem->addChild('RowNumber', $row['row_number'] ?? 0);
+                $mSkuItem->addChild('ItemAdminCode', $row['item_admin_code'] ?? '');
+                $mSkuItem->addChild('ItemCode', $row['item_code'] ?? '');
+                $mSkuItem->addChild('SizeCode', $row['size_code'] ?? '');
+                $mSkuItem->addChild('SizeName', $row['size_name'] ?? '');
+                $mSkuItem->addChild('ColorCode', $row['color_code'] ?? '');
+                $mSkuItem->addChild('ColorName', $row['color_name'] ?? '');
+                $mSkuItem->addChild('JanCode', $row['jancd'] ?? '');
                 $mSkuItem->addChild('Quantity', $row['quantity'] ?? 0);
                 $mSkuItem->addChild('CreatedDate', now()->format('Y-m-d H:i:s'));
                 $mSkuItem->addChild('UpdatedDate', now()->format('Y-m-d H:i:s'));
                 $mSkuItem->addChild('Createdby', $importedBy);
                 $mSkuItem->addChild('Updatedby', $importedBy);
 
+                $dataLogItem = $dataLogXml->addChild('Item'); // Note: the SP expects '/Items/Item'
+                $dataLogItem->addChild('ImportLog_ID', $importLogId); // required for your SP
+                $dataLogItem->addChild('Item_Code', $row['item_code'] ?? '');
+                $dataLogItem->addChild('Item_Name', $row['item_name'] ?? ''); // make sure item_name exists
+                $dataLogItem->addChild('JanCD', $row['jancd'] ?? '');
+                $dataLogItem->addChild('MakerName', $row['maker_name'] ?? '');
+                $dataLogItem->addChild('Memo', $row['memo'] ?? '');
+                $dataLogItem->addChild('ListPrice', $row['list_price'] ?? 0);
+                $dataLogItem->addChild('SalePrice', $row['sale_price'] ?? 0);
+                $dataLogItem->addChild('Size_Name', $row['size_name'] ?? '');
+                $dataLogItem->addChild('Color_Name', $row['color_name'] ?? '');
+                $dataLogItem->addChild('Size_Code', $row['size_code'] ?? '');
+                $dataLogItem->addChild('Color_Code', $row['color_code'] ?? '');
+                $dataLogItem->addChild('JanCode', $row['jancd'] ?? '');
+                $dataLogItem->addChild('Quantity', $row['quantity'] ?? 0);
+
                 $validCount++;
             }
 
-            // 4) Prepare error XML (for Item_Import_ErrorLog table)
-            $errorXml = new \SimpleXMLElement('<Items/>');
-            foreach ($errorRows as $err) {
-                $data = $err['data'] ?? [];
-                // $itemAdminCode = $this->generateItemAdminCode($data['item_code'] ?? '', $data['size_code'] ?? '', $data['color_code'] ?? '');
-
-                $item = $errorXml->addChild('Item');
-                $item->addChild('ImportLog_ID', $importLogId);
-                $item->addChild('Item_Code', $data['item_code'] ?? '');
-                $item->addChild('Item_Name', ''); // Empty for SKU import
-                $item->addChild('JanCD', $data['jancd'] ?? '');
-                $item->addChild('MakerName', ''); // Empty for SKU import
-                $item->addChild('Memo', ''); // Empty for SKU import
-
-                $listPrice = $data['list_price'] ?? $data['ListPrice'] ?? '0';
-                $salePrice = $data['sale_price'] ?? $data['SalePrice'] ?? '0';
-                $quantity = $data['quantity'] ?? '0';
-
-                $item->addChild('ListPrice', (string)$listPrice);
-                $item->addChild('SalePrice', (string)$salePrice);
-                $item->addChild('Size_Name', $data['size_name'] ?? '');
-                $item->addChild('Color_Name', $data['color_name'] ?? '');
-                $item->addChild('Size_Code', $data['size_code'] ?? '');
-                $item->addChild('Color_Code', $data['color_code'] ?? '');
-                $item->addChild('JanCode', '');
-                $item->addChild('Quantity', (string)$quantity);
-                $item->addChild('Error_Msg', implode(', ', $err['errors'] ?? []));
-            }
-
-            // 5) Call Stored Procedures
+            // dd($mSkuXml->asXML());
             if ($validCount > 0) {
-                // A) First, delete existing records from M_SKU for these item codes
-                if (!empty($itemCodesToDelete)) {
-                    $itemCodesArray = array_keys($itemCodesToDelete);
-                    Log::info('Deleting existing M_SKU records for item codes: ' . implode(', ', $itemCodesArray));
-
-                    // MSKU::whereIn('Item_Code', $itemCodesArray)->delete();
-
-                    DB::table('M_SKU')->whereIn('Item_Code', $itemCodesArray)->delete();
-                }
-
-                // B) Insert into Item_Import_DataLog
+                // dd($validCount, $mSkuXml->asXML);
+                // dd('M_SKU XML: ' . $dataLogXml->asXML());
                 DB::statement("DECLARE @xml XML = ?; EXEC sp_Insert_ItemImport_DataLog_XML @xml;", [$dataLogXml->asXML()]);
 
-                // C) Insert into M_SKU using stored procedure
-                Log::info('M_SKU XML: ' . $mSkuXml->asXML());
+                // dd($validCount, $mSkuXml);
                 DB::statement("DECLARE @xml XML = ?; EXEC sp_Insert_M_SKU_XML @xml;", [$mSkuXml->asXML()]);
             }
 
             if (count($errorRows) > 0) {
+                // dd(count($errorRows),$errorXml->asXML());
                 DB::statement("DECLARE @xml XML = ?; EXEC sp_Insert_ItemImport_ErrorLog_XML @xml;", [$errorXml->asXML()]);
             }
 

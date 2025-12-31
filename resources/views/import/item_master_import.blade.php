@@ -96,7 +96,7 @@
             </div>
         </form>
 
-        <!-- CSV form - Add id="csvImportForm" and error div -->
+        <!-- CSV form - Add id="csvImportForm" -->
         <form id="csvImportForm" action="{{ route('item-import.preview.csv-process') }}" method="POST" enctype="multipart/form-data">
             @csrf
             <div class="import-row">
